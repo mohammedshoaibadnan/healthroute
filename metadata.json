@@ -1,6 +1,6 @@
 {
-  "name": "HealthRoute - Hospital Emergency Management",
-  "description": "Hospital emergency coordination and patient information management platform for acute triage, unidentified patient intake, MLC records, poisoning protocols, and inter-facility transfers.",
+  "name": "HealthRoute - Hospital & Patient Care Coordination Platform",
+  "description": "General healthcare, outpatient consultation, patient information coordination, and clinical documentation platform with integrated emergency and transfer capabilities.",
   "requestFramePermissions": [],
   "majorCapabilities": [
     "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"

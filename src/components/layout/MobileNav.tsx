@@ -2,34 +2,37 @@ import React from 'react';
 import { useApp, NavigationTab } from '../../context/AppContext';
 import {
   LayoutDashboard,
+  Users,
+  CalendarClock,
   Stethoscope,
-  UserPlus,
-  Scale,
-  Biohazard,
+  ClipboardList,
+  AlertCircle,
   Truck,
   FileText,
   ShieldCheck,
 } from 'lucide-react';
 
 export const MobileNav: React.FC = () => {
-  const { activeTab, setActiveTab, cases, mlcCases } = useApp();
+  const { activeTab, setActiveTab, appointments, cases } = useApp();
 
-  const activeCasesCount = cases.filter(c => !['Discharged', 'Transferred', 'Brought Dead / Expired'].includes(c.status)).length;
-  const pendingMlcCount = mlcCases.filter(m => m.reviewStatus !== 'Signed & Sealed').length;
+  const waitingAppointments = appointments.filter((a) => a.status === 'Waiting').length;
+  const activeEmergencyCases = cases.filter(
+    (c) => !['Discharged', 'Transferred', 'Brought Dead / Expired'].includes(c.status)
+  ).length;
 
   const tabs: Array<{ id: NavigationTab; label: string; icon: React.ComponentType<{ className?: string }>; badge?: number }> = [
-    { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
-    { id: 'cases', label: 'Cases', icon: Stethoscope, badge: activeCasesCount },
-    { id: 'registration', label: 'Intake', icon: UserPlus },
-    { id: 'mlc', label: 'MLC', icon: Scale, badge: pendingMlcCount },
-    { id: 'poisoning', label: 'Tox', icon: Biohazard },
-    { id: 'transfers', label: 'Transfer', icon: Truck },
+    { id: 'overview', label: 'Overview', icon: LayoutDashboard },
+    { id: 'patients', label: 'Patients', icon: Users },
+    { id: 'appointments', label: 'Appts', icon: CalendarClock, badge: waitingAppointments },
+    { id: 'clinical', label: 'Clinical', icon: Stethoscope },
+    { id: 'records', label: 'Records', icon: ClipboardList },
+    { id: 'emergency', label: 'ER Care', icon: AlertCircle, badge: activeEmergencyCases },
+    { id: 'transfers', label: 'Transfers', icon: Truck },
     { id: 'documents', label: 'Docs', icon: FileText },
-    { id: 'admin', label: 'Admin', icon: ShieldCheck },
   ];
 
   return (
-    <nav className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-white border-t border-slate-200 px-2 py-1.5 flex items-center justify-around shadow-lg">
+    <nav className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-white border-t border-slate-200 px-1 py-1.5 flex items-center justify-around shadow-lg">
       {tabs.map((tab) => {
         const Icon = tab.icon;
         const isActive = activeTab === tab.id;
@@ -38,13 +41,13 @@ export const MobileNav: React.FC = () => {
             key={tab.id}
             onClick={() => setActiveTab(tab.id)}
             className={`flex flex-col items-center justify-center p-1 relative rounded-lg transition-colors ${
-              isActive ? 'text-teal-600 font-bold' : 'text-slate-500 hover:text-slate-800'
+              isActive ? 'text-teal-700 font-bold' : 'text-slate-500 hover:text-slate-800'
             }`}
           >
             <div className="relative">
               <Icon className="w-4 h-4" />
               {tab.badge && tab.badge > 0 ? (
-                <span className="absolute -top-1 -right-2 bg-rose-500 text-white text-[9px] font-bold px-1 rounded-full">
+                <span className="absolute -top-1 -right-2 bg-teal-600 text-white text-[9px] font-bold px-1 rounded-full">
                   {tab.badge}
                 </span>
               ) : null}

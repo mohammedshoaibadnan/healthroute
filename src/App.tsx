@@ -3,41 +3,58 @@ import { AppProvider, useApp } from './context/AppContext';
 import { Navbar } from './components/layout/Navbar';
 import { Sidebar } from './components/layout/Sidebar';
 import { MobileNav } from './components/layout/MobileNav';
-import { EmergencyDashboard } from './components/dashboard/EmergencyDashboard';
-import { EmergencyCaseList } from './components/cases/EmergencyCaseList';
+import { DoctorDashboard } from './components/dashboard/DoctorDashboard';
 import { PatientManagerView } from './components/patient/PatientManagerView';
-import { MLCManager } from './components/mlc/MLCManager';
-import { PoisoningManager } from './components/poison/PoisoningManager';
+import { AppointmentsView } from './components/appointments/AppointmentsView';
+import { ClinicalWorkspace } from './components/clinical/ClinicalWorkspace';
+import { MedicalRecordsView } from './components/records/MedicalRecordsView';
+import { EmergencyCareView } from './components/emergency/EmergencyCareView';
 import { TransferManager } from './components/transfer/TransferManager';
 import { DocumentCentre } from './components/documents/DocumentCentre';
 import { AdminDashboard } from './components/admin/AdminDashboard';
 import { PatientRegistrationModal } from './components/patient/PatientRegistrationModal';
 import { NewCaseModal } from './components/cases/NewCaseModal';
 import { CaseDetailModal } from './components/cases/CaseDetailModal';
+import { NewAppointmentModal } from './components/appointments/NewAppointmentModal';
+import { ConsultationNoteModal } from './components/clinical/ConsultationNoteModal';
 import { FirebaseArchitectureModal } from './components/firebase/FirebaseArchitectureModal';
 import { LoginPage } from './components/auth/LoginPage';
-import { LogOut } from 'lucide-react';
+
+import { PatientPortalLayout } from './components/patient_portal/PatientPortalLayout';
 
 const MainAppContent: React.FC = () => {
-  const { activeTab, currentUser } = useApp();
+  const { activeTab, portalMode } = useApp();
   const [isAuthenticated, setIsAuthenticated] = useState(true);
 
   if (!isAuthenticated) {
     return <LoginPage onLoginSuccess={() => setIsAuthenticated(true)} />;
   }
 
+  // Check if user is navigating the Patient Portal
+  const isPatientPortal = portalMode === 'patient' || activeTab.startsWith('patient-');
+  if (isPatientPortal) {
+    return <PatientPortalLayout />;
+  }
+
   const renderActiveView = () => {
     switch (activeTab) {
+      case 'overview':
       case 'dashboard':
-        return <EmergencyDashboard />;
-      case 'cases':
-        return <EmergencyCaseList />;
+        return <DoctorDashboard />;
+      case 'patients':
       case 'registration':
         return <PatientManagerView />;
+      case 'appointments':
+        return <AppointmentsView />;
+      case 'clinical':
+        return <ClinicalWorkspace />;
+      case 'records':
+        return <MedicalRecordsView />;
+      case 'emergency':
+      case 'cases':
       case 'mlc':
-        return <MLCManager />;
       case 'poisoning':
-        return <PoisoningManager />;
+        return <EmergencyCareView />;
       case 'transfers':
         return <TransferManager />;
       case 'documents':
@@ -45,7 +62,7 @@ const MainAppContent: React.FC = () => {
       case 'admin':
         return <AdminDashboard />;
       default:
-        return <EmergencyDashboard />;
+        return <DoctorDashboard />;
     }
   };
 
@@ -72,6 +89,8 @@ const MainAppContent: React.FC = () => {
       <PatientRegistrationModal />
       <NewCaseModal />
       <CaseDetailModal />
+      <NewAppointmentModal />
+      <ConsultationNoteModal />
       <FirebaseArchitectureModal />
     </div>
   );

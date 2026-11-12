@@ -26,6 +26,16 @@ import {
   INITIAL_DOCUMENTS,
   INITIAL_AUDIT_LOGS,
   INITIAL_INCOMING_AMBULANCES,
+  INITIAL_APPOINTMENTS,
+  INITIAL_ENCOUNTERS,
+  INITIAL_FOLLOWUPS,
+  INITIAL_LAB_REPORTS,
+  INITIAL_DOCTORS_DIRECTORY,
+  INITIAL_PATIENT_DOCUMENTS,
+  INITIAL_PATIENT_MESSAGES,
+  INITIAL_PATIENT_NOTIFICATIONS,
+  INITIAL_PRIVACY_SETTINGS,
+  INITIAL_ACCESS_AUDIT_LOGS,
 } from '../data/mockData';
 import {
   generateTempPatientId,
@@ -33,16 +43,38 @@ import {
   generatePoisonCaseId,
   generateTransferId,
 } from '../utils/rules';
+import {
+  Appointment,
+  AppointmentStatus,
+  ClinicalEncounter,
+  FollowUpReminder,
+  DiagnosticLabReport,
+  PatientTriageStatus,
+  PatientPortalTab,
+  DoctorDirectoryItem,
+  PatientDocument,
+  PatientMessage,
+  PatientNotification,
+  PrivacyConsentSettings,
+  AccessAuditRecord,
+} from '../types';
 
 export type NavigationTab = 
-  | 'dashboard'
-  | 'cases'
-  | 'registration'
-  | 'mlc'
-  | 'poisoning'
+  | 'overview'
+  | 'patients'
+  | 'appointments'
+  | 'clinical'
+  | 'records'
+  | 'emergency'
   | 'transfers'
   | 'documents'
-  | 'admin';
+  | 'admin'
+  | 'mlc'
+  | 'poisoning'
+  | 'registration'
+  | 'cases'
+  | 'dashboard'
+  | PatientPortalTab;
 
 interface AppContextType {
   currentUser: StaffUser;
@@ -62,9 +94,24 @@ interface AppContextType {
   auditLogs: AuditLog[];
   incomingAmbulances: IncomingAmbulance[];
 
+  // General Healthcare: Appointments, Consultations & Labs
+  appointments: Appointment[];
+  encounters: ClinicalEncounter[];
+  followUps: FollowUpReminder[];
+  labReports: DiagnosticLabReport[];
+
   // Patient Actions
   registerPatient: (data: Partial<Patient>) => { patient: Patient; tempId?: string };
   reconcilePatient: (patientId: string, permanentDetails: { name: string; contactNumber: string; address?: string; nationalId?: string; abhaId?: string }) => void;
+  updatePatientPhoto: (patientId: string, photoUrl: string) => void;
+
+  // Appointments & Consultations Actions
+  bookAppointment: (data: Partial<Appointment>) => Appointment;
+  updateAppointmentStatus: (aptId: string, status: AppointmentStatus) => void;
+  updateAppointmentTriageStatus: (aptId: string, status: PatientTriageStatus) => void;
+  startConsultation: (aptId: string) => void;
+  saveClinicalEncounter: (enc: Partial<ClinicalEncounter>) => ClinicalEncounter;
+  completeFollowUp: (fuId: string) => void;
 
   // Case Actions
   createEmergencyCase: (caseInput: Partial<EmergencyCase>, patientInput: Partial<Patient>) => EmergencyCase;
@@ -104,14 +151,69 @@ interface AppContextType {
   setSelectedTransferId: (id: string | null) => void;
   selectedDocId: string | null;
   setSelectedDocId: (id: string | null) => void;
+  selectedAppointmentId: string | null;
+  setSelectedAppointmentId: (id: string | null) => void;
   
   // Dialog Open States
   isNewRegistrationOpen: boolean;
   setIsNewRegistrationOpen: (open: boolean) => void;
   isNewCaseOpen: boolean;
   setIsNewCaseOpen: (open: boolean) => void;
+  isNewAppointmentOpen: boolean;
+  setIsNewAppointmentOpen: (open: boolean) => void;
+  isConsultationModalOpen: boolean;
+  setIsConsultationModalOpen: (open: boolean) => void;
   isFirebaseArchitectureOpen: boolean;
   setIsFirebaseArchitectureOpen: (open: boolean) => void;
+
+  // Patient Portal Core State
+  portalMode: 'hospital' | 'patient';
+  setPortalMode: (mode: 'hospital' | 'patient') => void;
+  activePatientId: string;
+  setActivePatientId: (id: string) => void;
+  activePatient: Patient;
+
+  // Patient Portal Collections
+  doctorsDirectory: DoctorDirectoryItem[];
+  patientDocuments: PatientDocument[];
+  patientMessages: PatientMessage[];
+  patientNotifications: PatientNotification[];
+  privacySettings: PrivacyConsentSettings;
+  accessAuditLogs: AccessAuditRecord[];
+
+  // Patient Portal Actions
+  requestPatientAppointment: (data: Partial<Appointment>) => Appointment;
+  rescheduleAppointment: (aptId: string, newDate: string, newTimeSlot: string, reason?: string) => void;
+  cancelAppointment: (aptId: string, reason: string) => void;
+  uploadPatientDocument: (doc: {
+    title: string;
+    category: PatientDocument['category'];
+    source: string;
+    fileType: PatientDocument['fileType'];
+    fileSize: string;
+    summary: string;
+    tags: string[];
+  }) => PatientDocument;
+  sendPatientMessage: (text: string, doctorId: string, doctorName: string, category?: PatientMessage['category']) => void;
+  markNotificationRead: (notifId: string) => void;
+  markAllNotificationsRead: () => void;
+  updatePatientProfile: (patientId: string, updates: Partial<Patient>) => void;
+  updatePrivacySettings: (updates: Partial<PrivacyConsentSettings>) => void;
+  recordEmergencyAccess: (purpose: string) => void;
+
+  // Patient Portal Modals
+  isPatientBookingModalOpen: boolean;
+  setIsPatientBookingModalOpen: (open: boolean) => void;
+  selectedBookingDoctor: DoctorDirectoryItem | null;
+  setSelectedBookingDoctor: (doc: DoctorDirectoryItem | null) => void;
+  isPatientUploadDocOpen: boolean;
+  setIsPatientUploadDocOpen: (open: boolean) => void;
+  previewDocument: PatientDocument | null;
+  setPreviewDocument: (doc: PatientDocument | null) => void;
+  previewLabReport: DiagnosticLabReport | null;
+  setPreviewLabReport: (report: DiagnosticLabReport | null) => void;
+  previewEncounter: ClinicalEncounter | null;
+  setPreviewEncounter: (enc: ClinicalEncounter | null) => void;
 
   // Audit
   logAuditAction: (action: string, targetType: AuditLog['targetType'], targetId: string, details: string) => void;
@@ -122,11 +224,69 @@ const AppContext = createContext<AppContextType | undefined>(undefined);
 export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [currentUser, setCurrentUser] = useState<StaffUser>(INITIAL_STAFF[0]);
   const [allStaff, setAllStaff] = useState<StaffUser[]>(INITIAL_STAFF);
-  const [activeTab, setActiveTab] = useState<NavigationTab>('dashboard');
+  const [activeTab, setActiveTab] = useState<NavigationTab>('overview');
 
   const [patients, setPatients] = useState<Patient[]>(() => {
     const saved = localStorage.getItem('hr_patients');
-    return saved ? JSON.parse(saved) : INITIAL_PATIENTS;
+    if (saved) {
+      try {
+        const parsed: Patient[] = JSON.parse(saved);
+        return parsed.map((p) => {
+          const init = INITIAL_PATIENTS.find((ip) => ip.id === p.id);
+          return init?.photoUrl && !p.photoUrl ? { ...p, photoUrl: init.photoUrl } : p;
+        });
+      } catch {
+        return INITIAL_PATIENTS;
+      }
+    }
+    return INITIAL_PATIENTS;
+  });
+
+  const [appointments, setAppointments] = useState<Appointment[]>(() => {
+    const today = new Date().toISOString().split('T')[0];
+    const saved = localStorage.getItem('hr_appointments');
+    if (saved) {
+      try {
+        const parsed: Appointment[] = JSON.parse(saved);
+        if (parsed.some((a) => a.date === today)) {
+          const mapped: Appointment[] = parsed.map((a): Appointment => {
+            const init = INITIAL_APPOINTMENTS.find((ia) => ia.id === a.id);
+            return {
+              ...a,
+              patientPhotoUrl: a.patientPhotoUrl || init?.patientPhotoUrl,
+              doctorPhotoUrl: a.doctorPhotoUrl || init?.doctorPhotoUrl,
+              triageStatus: a.triageStatus || init?.triageStatus,
+              vitalsSnapshot: a.vitalsSnapshot || init?.vitalsSnapshot,
+            };
+          });
+          // Append any missing initial appointments (such as newly added APT-2026-007)
+          INITIAL_APPOINTMENTS.forEach((ia) => {
+            if (!mapped.some((m) => m.id === ia.id)) {
+              mapped.push(ia);
+            }
+          });
+          return mapped;
+        }
+      } catch {
+        return INITIAL_APPOINTMENTS;
+      }
+    }
+    return INITIAL_APPOINTMENTS;
+  });
+
+  const [encounters, setEncounters] = useState<ClinicalEncounter[]>(() => {
+    const saved = localStorage.getItem('hr_encounters');
+    return saved ? JSON.parse(saved) : INITIAL_ENCOUNTERS;
+  });
+
+  const [followUps, setFollowUps] = useState<FollowUpReminder[]>(() => {
+    const saved = localStorage.getItem('hr_followups');
+    return saved ? JSON.parse(saved) : INITIAL_FOLLOWUPS;
+  });
+
+  const [labReports, setLabReports] = useState<DiagnosticLabReport[]>(() => {
+    const saved = localStorage.getItem('hr_labs');
+    return saved ? JSON.parse(saved) : INITIAL_LAB_REPORTS;
   });
 
   const [cases, setCases] = useState<EmergencyCase[]>(() => {
@@ -167,25 +327,116 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [selectedPoisonId, setSelectedPoisonId] = useState<string | null>(null);
   const [selectedTransferId, setSelectedTransferId] = useState<string | null>(null);
   const [selectedDocId, setSelectedDocId] = useState<string | null>(null);
+  const [selectedAppointmentId, setSelectedAppointmentId] = useState<string | null>(null);
 
   const [isNewRegistrationOpen, setIsNewRegistrationOpen] = useState(false);
   const [isNewCaseOpen, setIsNewCaseOpen] = useState(false);
+  const [isNewAppointmentOpen, setIsNewAppointmentOpen] = useState(false);
+  const [isConsultationModalOpen, setIsConsultationModalOpen] = useState(false);
   const [isFirebaseArchitectureOpen, setIsFirebaseArchitectureOpen] = useState(false);
+
+  // Patient Portal Core State
+  const [portalMode, setPortalModeState] = useState<'hospital' | 'patient'>(() => {
+    const saved = localStorage.getItem('hr_portal_mode');
+    return (saved === 'patient' || saved === 'hospital') ? saved : 'hospital';
+  });
+  const [activePatientId, setActivePatientId] = useState<string>('pat-known-01');
+
+  const [doctorsDirectory] = useState<DoctorDirectoryItem[]>(INITIAL_DOCTORS_DIRECTORY);
+
+  const [patientDocuments, setPatientDocuments] = useState<PatientDocument[]>(() => {
+    const saved = localStorage.getItem('hr_patient_docs');
+    return saved ? JSON.parse(saved) : INITIAL_PATIENT_DOCUMENTS;
+  });
+
+  const [patientMessages, setPatientMessages] = useState<PatientMessage[]>(() => {
+    const saved = localStorage.getItem('hr_patient_messages');
+    return saved ? JSON.parse(saved) : INITIAL_PATIENT_MESSAGES;
+  });
+
+  const [patientNotifications, setPatientNotifications] = useState<PatientNotification[]>(() => {
+    const saved = localStorage.getItem('hr_patient_notifs');
+    return saved ? JSON.parse(saved) : INITIAL_PATIENT_NOTIFICATIONS;
+  });
+
+  const [privacySettings, setPrivacySettings] = useState<PrivacyConsentSettings>(() => {
+    const saved = localStorage.getItem('hr_privacy_settings');
+    return saved ? JSON.parse(saved) : INITIAL_PRIVACY_SETTINGS;
+  });
+
+  const [accessAuditLogs, setAccessAuditLogs] = useState<AccessAuditRecord[]>(() => {
+    const saved = localStorage.getItem('hr_access_audits');
+    return saved ? JSON.parse(saved) : INITIAL_ACCESS_AUDIT_LOGS;
+  });
+
+  // Patient Modals
+  const [isPatientBookingModalOpen, setIsPatientBookingModalOpen] = useState(false);
+  const [selectedBookingDoctor, setSelectedBookingDoctor] = useState<DoctorDirectoryItem | null>(null);
+  const [isPatientUploadDocOpen, setIsPatientUploadDocOpen] = useState(false);
+  const [previewDocument, setPreviewDocument] = useState<PatientDocument | null>(null);
+  const [previewLabReport, setPreviewLabReport] = useState<DiagnosticLabReport | null>(null);
+  const [previewEncounter, setPreviewEncounter] = useState<ClinicalEncounter | null>(null);
+
+  const activePatient = patients.find((p) => p.id === activePatientId) || patients[0];
+
+  const setPortalMode = (mode: 'hospital' | 'patient') => {
+    setPortalModeState(mode);
+    try {
+      localStorage.setItem('hr_portal_mode', mode);
+    } catch {
+      // ignore
+    }
+    if (mode === 'patient') {
+      if (activeTab === 'overview' || !activeTab.startsWith('patient-')) {
+        setActiveTab('patient-home');
+      }
+    } else {
+      if (activeTab.startsWith('patient-')) {
+        setActiveTab('overview');
+      }
+    }
+  };
 
   // Save to local storage for realistic state retention
   useEffect(() => {
     try {
       localStorage.setItem('hr_patients', JSON.stringify(patients));
+      localStorage.setItem('hr_appointments', JSON.stringify(appointments));
+      localStorage.setItem('hr_encounters', JSON.stringify(encounters));
+      localStorage.setItem('hr_followups', JSON.stringify(followUps));
+      localStorage.setItem('hr_labs', JSON.stringify(labReports));
       localStorage.setItem('hr_cases', JSON.stringify(cases));
       localStorage.setItem('hr_mlcs', JSON.stringify(mlcCases));
       localStorage.setItem('hr_poisons', JSON.stringify(poisonCases));
       localStorage.setItem('hr_transfers', JSON.stringify(transfers));
       localStorage.setItem('hr_docs', JSON.stringify(documents));
       localStorage.setItem('hr_audits', JSON.stringify(auditLogs));
+      localStorage.setItem('hr_patient_docs', JSON.stringify(patientDocuments));
+      localStorage.setItem('hr_patient_messages', JSON.stringify(patientMessages));
+      localStorage.setItem('hr_patient_notifs', JSON.stringify(patientNotifications));
+      localStorage.setItem('hr_privacy_settings', JSON.stringify(privacySettings));
+      localStorage.setItem('hr_access_audits', JSON.stringify(accessAuditLogs));
     } catch {
       // ignore
     }
-  }, [patients, cases, mlcCases, poisonCases, transfers, documents, auditLogs]);
+  }, [
+    patients,
+    appointments,
+    encounters,
+    followUps,
+    labReports,
+    cases,
+    mlcCases,
+    poisonCases,
+    transfers,
+    documents,
+    auditLogs,
+    patientDocuments,
+    patientMessages,
+    patientNotifications,
+    privacySettings,
+    accessAuditLogs,
+  ]);
 
   const logAuditAction = (
     action: string,
@@ -209,6 +460,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const switchRole = (role: UserRole) => {
+    if (role === 'patient') {
+      setPortalMode('patient');
+      setActiveTab('patient-home');
+      logAuditAction('Session Role Switch', 'STAFF', activePatientId, 'Switched interface view to PATIENT PORTAL');
+      return;
+    }
+    setPortalMode('hospital');
     const match = allStaff.find((s) => s.role === role);
     if (match) {
       setCurrentUser(match);
@@ -222,6 +480,263 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       setCurrentUser(match);
       logAuditAction('User Switch', 'STAFF', match.id, `Active session user changed to ${match.name} (${match.role})`);
     }
+  };
+
+  const requestPatientAppointment = (data: Partial<Appointment>): Appointment => {
+    const nextSeq = appointments.length + 1;
+    const aptDate = data.date || new Date().toISOString().split('T')[0];
+    const targetPat = activePatient;
+    const targetDoc = doctorsDirectory.find((d) => d.id === data.doctorId) || doctorsDirectory[0];
+
+    const newApt: Appointment = {
+      id: `APT-2026-${String(nextSeq).padStart(3, '0')}`,
+      patientId: targetPat.id,
+      patientName: targetPat.name,
+      patientAge: targetPat.age || 48,
+      patientGender: targetPat.gender,
+      patientPhone: targetPat.contactNumber || '+91 98860 00000',
+      patientPhotoUrl: targetPat.photoUrl,
+      doctorId: targetDoc.id,
+      doctorName: targetDoc.name,
+      doctorPhotoUrl: targetDoc.photoUrl,
+      department: targetDoc.department,
+      date: aptDate,
+      timeSlot: data.timeSlot || '10:00 AM',
+      tokenNumber: appointments.filter((a) => a.date === aptDate).length + 1,
+      type: data.type || 'New Consultation',
+      status: 'Requested',
+      chiefComplaint: data.chiefComplaint || 'Consultation request via patient portal',
+      consultationMode: data.consultationMode || 'In-Person OPD',
+      hospitalName: targetDoc.hospitalAffiliation,
+      roomNo: 'OPD Consultation Room',
+      requestedByPatient: true,
+      createdAt: new Date().toISOString(),
+    };
+
+    setAppointments((prev) => [newApt, ...prev]);
+
+    // Add notification to patient
+    const notif: PatientNotification = {
+      id: `notif-${Date.now()}`,
+      patientId: targetPat.id,
+      category: 'appointment',
+      title: 'Appointment Request Submitted',
+      message: `Your appointment request for ${newApt.date} at ${newApt.timeSlot} with ${newApt.doctorName} has been submitted for hospital confirmation.`,
+      timestamp: new Date().toISOString(),
+      isRead: false,
+      actionTab: 'patient-appointments',
+      priority: 'high',
+    };
+    setPatientNotifications((prev) => [notif, ...prev]);
+
+    logAuditAction(
+      'Patient Appointment Requested',
+      'PATIENT',
+      targetPat.id,
+      `Patient requested appointment ${newApt.id} with ${newApt.doctorName} for ${newApt.date} (${newApt.timeSlot})`
+    );
+
+    return newApt;
+  };
+
+  const rescheduleAppointment = (aptId: string, newDate: string, newTimeSlot: string, reason?: string) => {
+    setAppointments((prev) =>
+      prev.map((a) =>
+        a.id === aptId
+          ? {
+              ...a,
+              date: newDate,
+              timeSlot: newTimeSlot,
+              status: 'Rescheduled',
+              notes: reason ? `${a.notes ? a.notes + ' | ' : ''}Rescheduled: ${reason}` : a.notes,
+            }
+          : a
+      )
+    );
+
+    const notif: PatientNotification = {
+      id: `notif-${Date.now()}`,
+      patientId: activePatientId,
+      category: 'appointment',
+      title: 'Appointment Rescheduled',
+      message: `Appointment ${aptId} has been rescheduled to ${newDate} at ${newTimeSlot}.`,
+      timestamp: new Date().toISOString(),
+      isRead: false,
+      actionTab: 'patient-appointments',
+      priority: 'normal',
+    };
+    setPatientNotifications((prev) => [notif, ...prev]);
+
+    logAuditAction('Appointment Rescheduled', 'PATIENT', aptId, `Rescheduled to ${newDate} at ${newTimeSlot}. Reason: ${reason || 'Patient request'}`);
+  };
+
+  const cancelAppointment = (aptId: string, reason: string) => {
+    setAppointments((prev) =>
+      prev.map((a) => (a.id === aptId ? { ...a, status: 'Cancelled', cancellationReason: reason } : a))
+    );
+
+    const notif: PatientNotification = {
+      id: `notif-${Date.now()}`,
+      patientId: activePatientId,
+      category: 'appointment',
+      title: 'Appointment Cancelled',
+      message: `Appointment ${aptId} was cancelled. Reason: ${reason}`,
+      timestamp: new Date().toISOString(),
+      isRead: false,
+      actionTab: 'patient-appointments',
+      priority: 'normal',
+    };
+    setPatientNotifications((prev) => [notif, ...prev]);
+
+    logAuditAction('Appointment Cancelled', 'PATIENT', aptId, `Cancelled by patient. Reason: ${reason}`);
+  };
+
+  const uploadPatientDocument = (doc: {
+    title: string;
+    category: PatientDocument['category'];
+    source: string;
+    fileType: PatientDocument['fileType'];
+    fileSize: string;
+    summary: string;
+    tags: string[];
+  }): PatientDocument => {
+    const newDoc: PatientDocument = {
+      id: `pdoc-${Date.now()}`,
+      patientId: activePatientId,
+      title: doc.title,
+      category: doc.category,
+      source: doc.source || 'Self-Uploaded by Patient',
+      date: new Date().toISOString().split('T')[0],
+      isVerified: false,
+      fileType: doc.fileType,
+      fileSize: doc.fileSize,
+      summary: doc.summary,
+      tags: doc.tags,
+    };
+
+    setPatientDocuments((prev) => [newDoc, ...prev]);
+
+    const notif: PatientNotification = {
+      id: `notif-${Date.now()}`,
+      patientId: activePatientId,
+      category: 'report',
+      title: 'Medical Document Uploaded',
+      message: `"${newDoc.title}" successfully added to your health records file. Available for clinician review.`,
+      timestamp: new Date().toISOString(),
+      isRead: false,
+      actionTab: 'patient-reports',
+      priority: 'normal',
+    };
+    setPatientNotifications((prev) => [notif, ...prev]);
+
+    logAuditAction('Patient Document Uploaded', 'PATIENT', newDoc.id, `Uploaded: ${newDoc.title} (${newDoc.category})`);
+    return newDoc;
+  };
+
+  const sendPatientMessage = (text: string, doctorId: string, doctorName: string, category?: PatientMessage['category']) => {
+    const docItem = doctorsDirectory.find((d) => d.id === doctorId);
+    const userMsg: PatientMessage = {
+      id: `msg-${Date.now()}`,
+      patientId: activePatientId,
+      doctorId,
+      doctorName,
+      doctorSpecialty: docItem?.specialty || 'Consultant Physician',
+      doctorPhotoUrl: docItem?.photoUrl,
+      sender: 'patient',
+      text,
+      timestamp: new Date().toISOString(),
+      isRead: true,
+      category: category || 'General Query',
+    };
+
+    setPatientMessages((prev) => [...prev, userMsg]);
+    logAuditAction('Patient Sent Clinical Message', 'PATIENT', activePatientId, `Message sent to ${doctorName}: "${text.slice(0, 50)}..."`);
+
+    // Simulated doctor response after 2 seconds
+    setTimeout(() => {
+      const replyMsg: PatientMessage = {
+        id: `msg-${Date.now() + 1}`,
+        patientId: activePatientId,
+        doctorId,
+        doctorName,
+        doctorSpecialty: docItem?.specialty || 'Consultant Physician',
+        doctorPhotoUrl: docItem?.photoUrl,
+        sender: 'doctor',
+        text: `Thank you for the update, Mr. ${activePatient.name.split(' ')[0]}. I have reviewed your message regarding "${text.slice(0, 35)}...". Please continue your prescribed dosage and keep monitoring your morning vitals. We will review this during your upcoming consultation.`,
+        timestamp: new Date().toISOString(),
+        isRead: false,
+        category: category || 'General Query',
+      };
+      setPatientMessages((prev) => [...prev, replyMsg]);
+      setPatientNotifications((prev) => [
+        {
+          id: `notif-${Date.now() + 2}`,
+          patientId: activePatientId,
+          category: 'reminder',
+          title: `New Message from ${doctorName}`,
+          message: `${doctorName} replied to your query.`,
+          timestamp: new Date().toISOString(),
+          isRead: false,
+          actionTab: 'patient-messages',
+          priority: 'normal',
+        },
+        ...prev,
+      ]);
+    }, 2000);
+  };
+
+  const markNotificationRead = (notifId: string) => {
+    setPatientNotifications((prev) => prev.map((n) => (n.id === notifId ? { ...n, isRead: true } : n)));
+  };
+
+  const markAllNotificationsRead = () => {
+    setPatientNotifications((prev) => prev.map((n) => ({ ...n, isRead: true })));
+  };
+
+  const updatePatientProfile = (patientId: string, updates: Partial<Patient>) => {
+    setPatients((prev) =>
+      prev.map((p) => {
+        if (p.id === patientId) {
+          return {
+            ...p,
+            contactNumber: updates.contactNumber || p.contactNumber,
+            address: updates.address || p.address,
+            selfReportedNotes: updates.selfReportedNotes !== undefined ? updates.selfReportedNotes : p.selfReportedNotes,
+            emergencyContact: updates.emergencyContact || p.emergencyContact,
+            nextOfKin: updates.nextOfKin || p.nextOfKin,
+          };
+        }
+        return p;
+      })
+    );
+    logAuditAction('Patient Profile Updated', 'PATIENT', patientId, 'Updated self-reported contact, address, and emergency details');
+  };
+
+  const updatePrivacySettings = (updates: Partial<PrivacyConsentSettings>) => {
+    setPrivacySettings((prev) => {
+      const next = { ...prev, ...updates };
+      try {
+        localStorage.setItem('hr_privacy_settings', JSON.stringify(next));
+      } catch {
+        // ignore
+      }
+      return next;
+    });
+    logAuditAction('Privacy & Consent Updated', 'PATIENT', activePatientId, 'Patient modified consent and information sharing permissions');
+  };
+
+  const recordEmergencyAccess = (purpose: string) => {
+    const accessRec: AccessAuditRecord = {
+      id: `acc-${Date.now()}`,
+      accessorName: currentUser.name,
+      accessorRole: currentUser.designation,
+      department: currentUser.department,
+      timestamp: new Date().toLocaleString(),
+      purpose,
+      action: 'Accessed Emergency Health Summary & Critical Allergies Card',
+    };
+    setAccessAuditLogs((prev) => [accessRec, ...prev]);
+    logAuditAction('Emergency Information Access', 'PATIENT', activePatientId, `Emergency summary accessed. Purpose: ${purpose}`);
   };
 
   const registerPatient = (data: Partial<Patient>): { patient: Patient; tempId?: string } => {
@@ -249,6 +764,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       physicalIdentification: data.physicalIdentification,
       registrationTimestamp: new Date().toISOString(),
       registeredBy: currentUser.name,
+      photoUrl: data.photoUrl,
     };
 
     setPatients((prev) => [newPatient, ...prev]);
@@ -311,6 +827,171 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       patientId,
       `Unidentified record resolved to permanent patient: ${permanentDetails.name} (MRN: ${newMrn})`
     );
+  };
+
+  const updatePatientPhoto = (patientId: string, photoUrl: string) => {
+    setPatients((prev) =>
+      prev.map((p) => (p.id === patientId ? { ...p, photoUrl } : p))
+    );
+    setAppointments((prev) =>
+      prev.map((a) => (a.patientId === patientId ? { ...a, patientPhotoUrl: photoUrl } : a))
+    );
+    setCases((prev) =>
+      prev.map((c) =>
+        c.patientId === patientId
+          ? { ...c, patientSnapshot: { ...c.patientSnapshot, photoUrl } }
+          : c
+      )
+    );
+    logAuditAction(
+      'Updated Patient Profile Photo',
+      'PATIENT',
+      patientId,
+      'Updated official photographic identity record in clinical registry'
+    );
+  };
+
+  const bookAppointment = (data: Partial<Appointment>): Appointment => {
+    const nextSeq = appointments.length + 1;
+    const aptDate = data.date || new Date().toISOString().split('T')[0];
+    const todayCount = appointments.filter((a) => a.date === aptDate).length;
+    const matchedPat = patients.find((p) => p.id === data.patientId);
+
+    const newApt: Appointment = {
+      id: `APT-2026-${String(nextSeq).padStart(3, '0')}`,
+      patientId: data.patientId || 'pat-known-01',
+      patientName: data.patientName || 'Consultation Patient',
+      patientAge: data.patientAge || 42,
+      patientGender: data.patientGender || 'Other',
+      patientPhone: data.patientPhone || '+91 98860 00000',
+      patientPhotoUrl: data.patientPhotoUrl || matchedPat?.photoUrl,
+      doctorId: data.doctorId || currentUser.id,
+      doctorName: data.doctorName || currentUser.name,
+      doctorPhotoUrl: data.doctorPhotoUrl || currentUser.photoUrl,
+      department: data.department || currentUser.department,
+      date: aptDate,
+      timeSlot: data.timeSlot || '10:00 AM',
+      tokenNumber: todayCount + 1,
+      type: data.type || 'New Consultation',
+      status: 'Scheduled',
+      chiefComplaint: data.chiefComplaint || 'General clinical review & health assessment',
+      roomNo: data.roomNo || 'OPD Room 204',
+      vitalsSnapshot: data.vitalsSnapshot,
+      createdAt: new Date().toISOString(),
+    };
+
+    setAppointments((prev) => [newApt, ...prev]);
+    logAuditAction(
+      'Appointment Scheduled',
+      'PATIENT',
+      newApt.patientId,
+      `Booked ${newApt.type} token #${newApt.tokenNumber} at ${newApt.timeSlot} for ${newApt.patientName}`
+    );
+    return newApt;
+  };
+
+  const updateAppointmentStatus = (aptId: string, status: AppointmentStatus) => {
+    setAppointments((prev) =>
+      prev.map((a) => (a.id === aptId ? { ...a, status } : a))
+    );
+    logAuditAction('Appointment Status Transition', 'PATIENT', aptId, `Status transitioned to: ${status}`);
+  };
+
+  const updateAppointmentTriageStatus = (aptId: string, triageStatus: PatientTriageStatus) => {
+    setAppointments((prev) => {
+      const updated = prev.map((a) => (a.id === aptId ? { ...a, triageStatus } : a));
+      localStorage.setItem('hr_appointments', JSON.stringify(updated));
+      return updated;
+    });
+    const targetApt = appointments.find((a) => a.id === aptId);
+    logAuditAction(
+      `Triage Acuity Assessment (${triageStatus})`,
+      'PATIENT',
+      targetApt?.patientId || aptId,
+      `Clinical Nurse ${currentUser.name} updated triage acuity for ${targetApt?.patientName || 'patient'} to ${triageStatus}`
+    );
+  };
+
+  const startConsultation = (aptId: string) => {
+    setSelectedAppointmentId(aptId);
+    setAppointments((prev) =>
+      prev.map((a) => (a.id === aptId ? { ...a, status: 'In Consultation' } : a))
+    );
+    setIsConsultationModalOpen(true);
+    logAuditAction('Consultation Started', 'PATIENT', aptId, `Started active clinical consultation for appointment ${aptId}`);
+  };
+
+  const saveClinicalEncounter = (enc: Partial<ClinicalEncounter>): ClinicalEncounter => {
+    const existingIndex = encounters.findIndex((e) => e.id === enc.id);
+    let saved: ClinicalEncounter;
+
+    if (existingIndex >= 0) {
+      saved = {
+        ...encounters[existingIndex],
+        ...enc,
+        updatedAt: new Date().toISOString(),
+      } as ClinicalEncounter;
+
+      setEncounters((prev) => {
+        const next = [...prev];
+        next[existingIndex] = saved;
+        return next;
+      });
+    } else {
+      const nextSeq = encounters.length + 1;
+      saved = {
+        id: enc.id || `ENC-2026-${String(nextSeq).padStart(3, '0')}`,
+        appointmentId: enc.appointmentId,
+        patientId: enc.patientId || 'pat-known-01',
+        patientName: enc.patientName || 'Consultation Patient',
+        doctorId: currentUser.id,
+        doctorName: currentUser.name,
+        department: currentUser.department,
+        date: enc.date || new Date().toISOString().split('T')[0],
+        encounterType: enc.encounterType || 'OPD Consultation',
+        chiefComplaint: enc.chiefComplaint || 'Clinical Consultation',
+        subjectiveHistory: enc.subjectiveHistory || '',
+        physicalExamination: enc.physicalExamination || '',
+        vitals: enc.vitals || {
+          bp: '120/80',
+          pulse: 76,
+          spo2: 98,
+          temp: 98.4,
+          rr: 16,
+          gcs: 15,
+          recordedAt: new Date().toISOString(),
+        },
+        assessmentDiagnosis: enc.assessmentDiagnosis || 'Clinical Assessment Completed',
+        prescriptions: enc.prescriptions || [],
+        orderedInvestigations: enc.orderedInvestigations || [],
+        followUpDate: enc.followUpDate,
+        clinicalAdvice: enc.clinicalAdvice || '',
+        status: enc.status || 'Finalized',
+        updatedAt: new Date().toISOString(),
+      };
+      setEncounters((prev) => [saved, ...prev]);
+    }
+
+    // If an appointment was linked, mark it completed
+    if (saved.appointmentId) {
+      updateAppointmentStatus(saved.appointmentId, 'Completed');
+    }
+
+    logAuditAction(
+      'Clinical Encounter Recorded',
+      'PATIENT',
+      saved.patientId,
+      `Diagnosis: ${saved.assessmentDiagnosis}. Prescriptions: ${saved.prescriptions.length} items.`
+    );
+
+    return saved;
+  };
+
+  const completeFollowUp = (fuId: string) => {
+    setFollowUps((prev) =>
+      prev.map((f) => (f.id === fuId ? { ...f, status: 'completed' } : f))
+    );
+    logAuditAction('Follow-up Reminder Completed', 'PATIENT', fuId, `Marked reminder as completed by ${currentUser.name}`);
   };
 
   const createEmergencyCase = (
@@ -883,8 +1564,21 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         auditLogs,
         incomingAmbulances,
 
+        appointments,
+        encounters,
+        followUps,
+        labReports,
+
         registerPatient,
         reconcilePatient,
+        updatePatientPhoto,
+
+        bookAppointment,
+        updateAppointmentStatus,
+        updateAppointmentTriageStatus,
+        startConsultation,
+        saveClinicalEncounter,
+        completeFollowUp,
 
         createEmergencyCase,
         updateCaseStatus,
@@ -917,13 +1611,60 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         setSelectedTransferId,
         selectedDocId,
         setSelectedDocId,
+        selectedAppointmentId,
+        setSelectedAppointmentId,
 
         isNewRegistrationOpen,
         setIsNewRegistrationOpen,
         isNewCaseOpen,
         setIsNewCaseOpen,
+        isNewAppointmentOpen,
+        setIsNewAppointmentOpen,
+        isConsultationModalOpen,
+        setIsConsultationModalOpen,
         isFirebaseArchitectureOpen,
         setIsFirebaseArchitectureOpen,
+
+        // Patient Portal State
+        portalMode,
+        setPortalMode,
+        activePatientId,
+        setActivePatientId,
+        activePatient,
+
+        // Patient Portal Collections
+        doctorsDirectory,
+        patientDocuments,
+        patientMessages,
+        patientNotifications,
+        privacySettings,
+        accessAuditLogs,
+
+        // Patient Portal Actions
+        requestPatientAppointment,
+        rescheduleAppointment,
+        cancelAppointment,
+        uploadPatientDocument,
+        sendPatientMessage,
+        markNotificationRead,
+        markAllNotificationsRead,
+        updatePatientProfile,
+        updatePrivacySettings,
+        recordEmergencyAccess,
+
+        // Patient Portal Modals
+        isPatientBookingModalOpen,
+        setIsPatientBookingModalOpen,
+        selectedBookingDoctor,
+        setSelectedBookingDoctor,
+        isPatientUploadDocOpen,
+        setIsPatientUploadDocOpen,
+        previewDocument,
+        setPreviewDocument,
+        previewLabReport,
+        setPreviewLabReport,
+        previewEncounter,
+        setPreviewEncounter,
 
         logAuditAction,
       }}

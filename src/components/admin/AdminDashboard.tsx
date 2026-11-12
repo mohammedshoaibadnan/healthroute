@@ -15,6 +15,7 @@ import {
   Lock,
 } from 'lucide-react';
 import { UserRole, AuditLog } from '../../types';
+import { Avatar } from '../common/Avatar';
 
 export const AdminDashboard: React.FC = () => {
   const {
@@ -47,26 +48,26 @@ export const AdminDashboard: React.FC = () => {
   return (
     <div className="p-4 lg:p-6 space-y-6 max-w-7xl mx-auto">
       {/* Header */}
-      <div className="bg-white rounded-xl p-5 border border-slate-200/90 shadow-xs flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+      <div className="bg-white rounded-2xl p-6 border border-slate-200/90 shadow-[0_4px_20px_-4px_rgba(15,23,42,0.04)] flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <div>
-          <div className="flex items-center gap-2">
-            <h1 className="text-xl font-bold tracking-tight text-slate-900">
+          <div className="flex items-center gap-2.5">
+            <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-slate-900">
               Hospital Operations & Administration
             </h1>
-            <span className="text-[11px] font-bold px-2 py-0.5 rounded-full bg-slate-100 text-slate-800 border border-slate-200">
+            <span className="text-xs font-bold px-2.5 py-0.5 rounded-full bg-slate-100 text-slate-800 border border-slate-200">
               Admin & Compliance
             </span>
           </div>
-          <p className="text-xs text-slate-500 mt-0.5">
-            Emergency department staff roster, role-based access management, capacity command, and immutable audit logs.
+          <p className="text-xs sm:text-sm text-slate-500 mt-1">
+            Staff credential verification, role-based authorization controls, clinical capacity metrics, and immutable audit trails.
           </p>
         </div>
 
         <button
           onClick={() => setIsFirebaseArchitectureOpen(true)}
-          className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg bg-[#0b192e] hover:bg-slate-800 text-white text-xs font-semibold shadow-xs transition-colors"
+          className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-[#0b192e] hover:bg-slate-800 active:scale-[0.98] text-white text-xs font-semibold shadow-xs transition-colors cursor-pointer whitespace-nowrap"
         >
-          <Database className="w-3.5 h-3.5 text-teal-400" />
+          <Database className="w-4 h-4 text-amber-400" />
           <span>Firebase Production Blueprint</span>
         </button>
       </div>
@@ -137,9 +138,20 @@ export const AdminDashboard: React.FC = () => {
                   {allStaff.map((staff) => (
                     <tr key={staff.id} className="hover:bg-slate-50 transition-colors">
                       <td className="py-3 px-3">
-                        <div className="font-bold text-slate-900">{staff.name}</div>
-                        <div className="text-[11px] text-slate-500 font-mono">
-                          ID: {staff.employeeCode} • {staff.email}
+                        <div className="flex items-center gap-2.5">
+                          <Avatar
+                            src={staff.photoUrl}
+                            name={staff.name}
+                            size="sm"
+                            gender={staff.name.includes('Ananya') || staff.name.includes('Rekha') || staff.name.includes('Radhika') ? 'Female' : 'Male'}
+                            status={staff.onDuty ? 'online' : undefined}
+                          />
+                          <div>
+                            <div className="font-bold text-slate-900 text-xs">{staff.name}</div>
+                            <div className="text-[11px] text-slate-500 font-mono">
+                              ID: {staff.employeeCode} • {staff.email}
+                            </div>
+                          </div>
                         </div>
                       </td>
 

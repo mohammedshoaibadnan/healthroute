@@ -14,13 +14,21 @@ import {
   Shirt,
   X,
   Phone,
+  Camera,
+  Image as ImageIcon,
+  Check,
+  Sparkles,
+  ExternalLink,
+  UploadCloud,
 } from 'lucide-react';
 import { Patient } from '../../types';
+import { Avatar } from '../common/Avatar';
 
 export const PatientManagerView: React.FC = () => {
   const { 
     patients, 
     reconcilePatient, 
+    updatePatientPhoto,
     setIsNewRegistrationOpen,
     setIsNewCaseOpen,
     setSelectedCaseId,
@@ -30,6 +38,9 @@ export const PatientManagerView: React.FC = () => {
   const [activeTab, setActiveTab] = useState<'all' | 'unidentified' | 'reconciled'>('unidentified');
   const [search, setSearch] = useState('');
   const [reconcilingPatient, setReconcilingPatient] = useState<Patient | null>(null);
+  const [selectedProfilePatient, setSelectedProfilePatient] = useState<Patient | null>(null);
+  const [isChangingPhoto, setIsChangingPhoto] = useState(false);
+  const [customPhotoUrl, setCustomPhotoUrl] = useState('');
 
   // Reconciliation form states
   const [legalName, setLegalName] = useState('');
@@ -83,27 +94,27 @@ export const PatientManagerView: React.FC = () => {
   return (
     <div className="p-4 lg:p-6 space-y-6 max-w-7xl mx-auto">
       {/* Header */}
-      <div className="bg-white rounded-xl p-5 border border-slate-200/90 shadow-xs flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+      <div className="bg-white rounded-2xl p-6 border border-slate-200/90 shadow-[0_4px_20px_-4px_rgba(15,23,42,0.04)] flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <div>
-          <div className="flex items-center gap-2">
-            <h1 className="text-xl font-bold tracking-tight text-slate-900">
-              Patient Intake & Temporary ID Registry
+          <div className="flex items-center gap-2.5">
+            <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-slate-900">
+              Patient Registry & Demographic Records
             </h1>
-            <span className="text-[11px] font-bold px-2 py-0.5 rounded-full bg-amber-50 text-amber-800 border border-amber-200">
+            <span className="text-xs font-bold px-2.5 py-0.5 rounded-full bg-amber-50 text-amber-800 border border-amber-200">
               {unidentifiedPatients.length} Active Temp IDs
             </span>
           </div>
-          <p className="text-xs text-slate-500 mt-0.5">
-            Registry for trauma intake, unidentified patient identification, and permanent MRN record reconciliation.
+          <p className="text-xs sm:text-sm text-slate-500 mt-1">
+            Centralized directory for outpatient intake, emergency trauma admissions, and ABHA / permanent MRN record reconciliation.
           </p>
         </div>
 
         <button
           onClick={() => setIsNewRegistrationOpen(true)}
-          className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg bg-teal-600 hover:bg-teal-700 text-white text-xs font-semibold shadow-xs transition-colors"
+          className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-xl bg-teal-600 hover:bg-teal-700 active:scale-[0.98] text-white text-xs font-semibold shadow-xs shadow-teal-600/20 transition-all cursor-pointer whitespace-nowrap"
         >
-          <UserPlus className="w-3.5 h-3.5" />
-          <span>New Emergency Intake</span>
+          <UserPlus className="w-4 h-4" />
+          <span>Register New Patient</span>
         </button>
       </div>
 
@@ -180,7 +191,7 @@ export const PatientManagerView: React.FC = () => {
           return (
             <div
               key={patient.id}
-              className={`bg-white rounded-xl border p-4 shadow-xs transition-all flex flex-col justify-between ${
+              className={`bg-white rounded-2xl border p-5 shadow-[0_4px_20px_-4px_rgba(15,23,42,0.04)] transition-all flex flex-col justify-between ${
                 patient.isUnidentified
                   ? 'border-amber-300 hover:border-amber-400'
                   : 'border-slate-200/90 hover:border-slate-300'
@@ -188,31 +199,53 @@ export const PatientManagerView: React.FC = () => {
             >
               <div>
                 {/* Header */}
-                <div className="flex items-start justify-between gap-2">
-                  <div>
-                    <div className="flex items-center gap-1.5">
-                      <span className="font-bold text-sm text-slate-900">{patient.name}</span>
+                <div className="flex items-start justify-between gap-3">
+                  <div className="flex items-center gap-3">
+                    <button
+                      type="button"
+                      onClick={() => setSelectedProfilePatient(patient)}
+                      className="focus:outline-hidden group/avatar cursor-pointer shrink-0"
+                      title="Click to view patient profile & photo"
+                    >
+                      <Avatar
+                        src={patient.photoUrl}
+                        name={patient.name}
+                        gender={patient.gender}
+                        size="lg"
+                        className="group-hover/avatar:ring-2 group-hover/avatar:ring-teal-500 transition-all shadow-xs"
+                      />
+                    </button>
+                    <div>
+                      <div className="flex items-center gap-1.5">
+                        <button
+                          type="button"
+                          onClick={() => setSelectedProfilePatient(patient)}
+                          className="font-bold text-sm text-slate-900 hover:text-teal-700 transition-colors text-left cursor-pointer"
+                        >
+                          {patient.name}
+                        </button>
+                      </div>
+                      {patient.isUnidentified && patient.tempId && (
+                        <div className="text-xs font-mono font-bold text-amber-800 bg-amber-50 px-2 py-0.5 rounded-md border border-amber-200 mt-1 inline-block">
+                          {patient.tempId}
+                        </div>
+                      )}
+                      {patient.permanentMrn && (
+                        <div className="text-[11px] font-mono text-slate-500 mt-0.5">
+                          MRN: {patient.permanentMrn}
+                        </div>
+                      )}
                     </div>
-                    {patient.isUnidentified && patient.tempId && (
-                      <div className="text-xs font-mono font-bold text-amber-800 bg-amber-50 px-2 py-0.5 rounded border border-amber-200 mt-1 inline-block">
-                        {patient.tempId}
-                      </div>
-                    )}
-                    {patient.permanentMrn && (
-                      <div className="text-[11px] font-mono text-slate-500 mt-0.5">
-                        MRN: {patient.permanentMrn}
-                      </div>
-                    )}
                   </div>
 
                   <span
-                    className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded ${
+                    className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded-full ${
                       patient.isUnidentified
                         ? 'bg-amber-100 text-amber-800 border border-amber-300'
                         : 'bg-teal-50 text-teal-800 border border-teal-200'
                     }`}
                   >
-                    {patient.isUnidentified ? 'TEMPORARY ID' : 'PERMANENT RECORD'}
+                    {patient.isUnidentified ? 'TEMP ID' : 'PERMANENT'}
                   </span>
                 </div>
 
@@ -274,26 +307,40 @@ export const PatientManagerView: React.FC = () => {
 
               {/* Bottom Actions */}
               <div className="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between gap-2 text-xs">
-                {activeCase ? (
+                <div className="flex items-center gap-2">
                   <button
-                    onClick={() => setSelectedCaseId(activeCase.id)}
-                    className="text-teal-600 font-semibold hover:underline flex items-center gap-1"
+                    type="button"
+                    onClick={() => setSelectedProfilePatient(patient)}
+                    className="px-2.5 py-1 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold transition-colors flex items-center gap-1 cursor-pointer"
                   >
-                    <span>View Case ({activeCase.bedBay})</span>
+                    <UserCheck className="w-3.5 h-3.5 text-teal-600" />
+                    <span>Profile & Photo</span>
                   </button>
-                ) : (
-                  <button
-                    onClick={() => setIsNewCaseOpen(true)}
-                    className="text-slate-600 font-medium hover:text-slate-900"
-                  >
-                    + Open ER Case
-                  </button>
-                )}
+
+                  {activeCase ? (
+                    <button
+                      type="button"
+                      onClick={() => setSelectedCaseId(activeCase.id)}
+                      className="text-teal-600 font-semibold hover:underline flex items-center gap-1 cursor-pointer"
+                    >
+                      <span>Case ({activeCase.bedBay})</span>
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => setIsNewCaseOpen(true)}
+                      className="text-slate-500 font-medium hover:text-slate-900 cursor-pointer"
+                    >
+                      + ER Case
+                    </button>
+                  )}
+                </div>
 
                 {patient.isUnidentified ? (
                   <button
+                    type="button"
                     onClick={() => handleStartReconcile(patient)}
-                    className="px-2.5 py-1 rounded bg-amber-600 hover:bg-amber-700 text-white font-semibold transition-colors"
+                    className="px-2.5 py-1 rounded-lg bg-amber-600 hover:bg-amber-700 text-white font-semibold transition-colors cursor-pointer"
                   >
                     Reconcile ID
                   </button>
@@ -307,6 +354,290 @@ export const PatientManagerView: React.FC = () => {
           );
         })}
       </div>
+
+      {/* Patient Profile & Photo Management Modal */}
+      {selectedProfilePatient && (
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto">
+          <div className="bg-white rounded-2xl max-w-2xl w-full border border-slate-200 shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-150 my-6">
+            {/* Modal Header */}
+            <div className="bg-[#0b192e] text-white p-5 flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="w-9 h-9 rounded-xl bg-teal-500/20 text-teal-400 flex items-center justify-center border border-teal-500/30">
+                  <UserCheck className="w-5 h-5 text-teal-400" />
+                </div>
+                <div>
+                  <h3 className="font-bold text-base sm:text-lg">Patient Clinical Profile & Identity</h3>
+                  <p className="text-xs text-slate-400">
+                    {selectedProfilePatient.permanentMrn || selectedProfilePatient.tempId || selectedProfilePatient.id} • Registered {new Date(selectedProfilePatient.registrationTimestamp).toLocaleDateString()}
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setSelectedProfilePatient(null);
+                  setIsChangingPhoto(false);
+                  setCustomPhotoUrl('');
+                }}
+                className="text-slate-400 hover:text-white p-1 rounded-lg hover:bg-slate-800 transition-colors cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="p-6 space-y-5 max-h-[80vh] overflow-y-auto text-xs">
+              {/* Photo & Identity Hero */}
+              <div className="p-4 rounded-2xl bg-gradient-to-br from-slate-50 to-teal-50/20 border border-slate-200/90 flex flex-col sm:flex-row items-center sm:items-start gap-4">
+                <div className="relative shrink-0">
+                  <Avatar
+                    src={selectedProfilePatient.photoUrl}
+                    name={selectedProfilePatient.name}
+                    gender={selectedProfilePatient.gender}
+                    size="2xl"
+                    className="ring-4 ring-white shadow-md rounded-full"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setIsChangingPhoto(!isChangingPhoto)}
+                    className="absolute bottom-0 right-0 p-1.5 rounded-full bg-teal-600 hover:bg-teal-700 text-white shadow-md border-2 border-white transition-all cursor-pointer"
+                    title="Change or upload patient photo"
+                  >
+                    <Camera className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+
+                <div className="text-center sm:text-left flex-1 min-w-0">
+                  <div className="flex items-center justify-center sm:justify-start gap-2 flex-wrap">
+                    <h4 className="text-lg font-bold text-slate-900">{selectedProfilePatient.name}</h4>
+                    <span className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded-full ${
+                      selectedProfilePatient.isUnidentified 
+                        ? 'bg-amber-100 text-amber-800 border border-amber-300' 
+                        : 'bg-teal-50 text-teal-800 border border-teal-200'
+                    }`}>
+                      {selectedProfilePatient.isUnidentified ? 'TEMPORARY ID' : 'PERMANENT RECORD'}
+                    </span>
+                  </div>
+
+                  <div className="mt-1 flex items-center justify-center sm:justify-start gap-3 text-slate-600 flex-wrap">
+                    <span><strong>Age:</strong> {selectedProfilePatient.age} yrs {selectedProfilePatient.ageEstimated ? '(Estimated)' : ''}</span>
+                    <span>•</span>
+                    <span><strong>Gender:</strong> {selectedProfilePatient.gender}</span>
+                    <span>•</span>
+                    <span><strong>Blood Group:</strong> <span className="font-bold text-slate-900">{selectedProfilePatient.bloodGroup || 'Unknown'}</span></span>
+                  </div>
+
+                  <div className="mt-3 flex items-center justify-center sm:justify-start gap-2 flex-wrap">
+                    <button
+                      type="button"
+                      onClick={() => setIsChangingPhoto(!isChangingPhoto)}
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white hover:bg-slate-100 text-slate-700 font-semibold border border-slate-200 shadow-2xs transition-all cursor-pointer"
+                    >
+                      <ImageIcon className="w-3.5 h-3.5 text-teal-600" />
+                      <span>{isChangingPhoto ? 'Close Photo Options' : 'Update Patient Photo'}</span>
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              {/* Photo Change Panel (Interactive presets and custom photo URL) */}
+              {isChangingPhoto && (
+                <div className="p-4 rounded-xl bg-teal-50/50 border border-teal-200/90 space-y-3 animate-in fade-in duration-150">
+                  <div className="flex items-center justify-between">
+                    <span className="font-bold text-slate-900 flex items-center gap-1.5">
+                      <Sparkles className="w-4 h-4 text-teal-600" />
+                      <span>Select or Upload Patient Photograph</span>
+                    </span>
+                    <span className="text-[10px] text-teal-700 font-semibold">Immediate Clinical Sync</span>
+                  </div>
+
+                  {/* Photo Presets */}
+                  <div>
+                    <label className="block text-[11px] text-slate-600 font-semibold mb-1.5">
+                      Choose from Verified Clinical Sample Portraits:
+                    </label>
+                    <div className="grid grid-cols-3 gap-2">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const url = '/src/assets/images/pat_rameshwar_reddy_1794455154121.jpg';
+                          updatePatientPhoto(selectedProfilePatient.id, url);
+                          setSelectedProfilePatient({ ...selectedProfilePatient, photoUrl: url });
+                          setIsChangingPhoto(false);
+                        }}
+                        className="flex items-center gap-2 p-2 rounded-xl bg-white hover:bg-teal-50 border border-slate-200 hover:border-teal-400 text-left transition-all cursor-pointer"
+                      >
+                        <img 
+                          src="/src/assets/images/pat_rameshwar_reddy_1794455154121.jpg" 
+                          alt="Preset 1"
+                          referrerPolicy="no-referrer"
+                          className="w-8 h-8 rounded-full object-cover shrink-0" 
+                        />
+                        <div className="min-w-0">
+                          <span className="font-bold text-slate-800 text-[11px] block truncate">Male (48y)</span>
+                          <span className="text-[10px] text-slate-400">Rameshwar R.</span>
+                        </div>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const url = '/src/assets/images/pat_pooja_venkatesh_1794455154316.jpg';
+                          updatePatientPhoto(selectedProfilePatient.id, url);
+                          setSelectedProfilePatient({ ...selectedProfilePatient, photoUrl: url });
+                          setIsChangingPhoto(false);
+                        }}
+                        className="flex items-center gap-2 p-2 rounded-xl bg-white hover:bg-teal-50 border border-slate-200 hover:border-teal-400 text-left transition-all cursor-pointer"
+                      >
+                        <img 
+                          src="/src/assets/images/pat_pooja_venkatesh_1794455154316.jpg" 
+                          alt="Preset 2"
+                          referrerPolicy="no-referrer"
+                          className="w-8 h-8 rounded-full object-cover shrink-0" 
+                        />
+                        <div className="min-w-0">
+                          <span className="font-bold text-slate-800 text-[11px] block truncate">Female (29y)</span>
+                          <span className="text-[10px] text-slate-400">Pooja V.</span>
+                        </div>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const url = '/src/assets/images/pat_gopal_krishnan_1794455154918.jpg';
+                          updatePatientPhoto(selectedProfilePatient.id, url);
+                          setSelectedProfilePatient({ ...selectedProfilePatient, photoUrl: url });
+                          setIsChangingPhoto(false);
+                        }}
+                        className="flex items-center gap-2 p-2 rounded-xl bg-white hover:bg-teal-50 border border-slate-200 hover:border-teal-400 text-left transition-all cursor-pointer"
+                      >
+                        <img 
+                          src="/src/assets/images/pat_gopal_krishnan_1794455154918.jpg" 
+                          alt="Preset 3"
+                          referrerPolicy="no-referrer"
+                          className="w-8 h-8 rounded-full object-cover shrink-0" 
+                        />
+                        <div className="min-w-0">
+                          <span className="font-bold text-slate-800 text-[11px] block truncate">Senior (62y)</span>
+                          <span className="text-[10px] text-slate-400">Gopal K.</span>
+                        </div>
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Custom URL or clear */}
+                  <div className="pt-2 border-t border-teal-200/60 flex items-center gap-2">
+                    <input
+                      type="text"
+                      placeholder="Or paste external photo URL..."
+                      value={customPhotoUrl}
+                      onChange={(e) => setCustomPhotoUrl(e.target.value)}
+                      className="flex-1 px-3 py-1.5 rounded-lg border border-slate-200 bg-white text-xs"
+                    />
+                    <button
+                      type="button"
+                      disabled={!customPhotoUrl.trim()}
+                      onClick={() => {
+                        if (!customPhotoUrl.trim()) return;
+                        updatePatientPhoto(selectedProfilePatient.id, customPhotoUrl.trim());
+                        setSelectedProfilePatient({ ...selectedProfilePatient, photoUrl: customPhotoUrl.trim() });
+                        setCustomPhotoUrl('');
+                        setIsChangingPhoto(false);
+                      }}
+                      className="px-3 py-1.5 rounded-lg bg-teal-600 hover:bg-teal-700 disabled:opacity-50 text-white font-semibold cursor-pointer"
+                    >
+                      Apply
+                    </button>
+                    {selectedProfilePatient.photoUrl && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          updatePatientPhoto(selectedProfilePatient.id, '');
+                          setSelectedProfilePatient({ ...selectedProfilePatient, photoUrl: undefined });
+                          setIsChangingPhoto(false);
+                        }}
+                        className="px-2.5 py-1.5 rounded-lg bg-rose-50 text-rose-700 hover:bg-rose-100 border border-rose-200 font-semibold cursor-pointer"
+                      >
+                        Remove
+                      </button>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* Patient Profiling & Uploads Architecture Note (Per User Prompt) */}
+              <div className="p-3.5 rounded-xl bg-blue-50/70 border border-blue-200/90 text-blue-900 space-y-1.5">
+                <div className="flex items-center gap-2 font-bold text-blue-950">
+                  <UploadCloud className="w-4 h-4 text-blue-600" />
+                  <span>Patient Profiling & Self-Service File Upload (Roadmap Preview)</span>
+                </div>
+                <p className="text-[11px] text-blue-800 leading-relaxed">
+                  As planned for the subsequent patient self-service release, patients will be provided dedicated access to upload their past diagnostic PDFs, imaging investigations, prescription scans, and profile photos. Currently, hospital staff maintain authorization to manage identities on the doctor workspace.
+                </p>
+              </div>
+
+              {/* Demographics & Contact Grid */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div className="p-3 rounded-xl bg-slate-50 border border-slate-200 space-y-1.5">
+                  <span className="font-bold text-slate-800 block text-xs">Identification & Government Accounts</span>
+                  <div className="text-[11px] space-y-1">
+                    <p><span className="text-slate-500">ABHA Health ID:</span> <strong className="font-mono text-slate-800">{selectedProfilePatient.abhaId || 'Not linked / Pending ABDM e-KYC'}</strong></p>
+                    <p><span className="text-slate-500">National ID Ref:</span> <span className="font-mono text-slate-800">{selectedProfilePatient.nationalIdPlaceholder || 'Aadhaar / Voter ID not recorded'}</span></p>
+                    <p><span className="text-slate-500">Registered By:</span> <span className="text-slate-800">{selectedProfilePatient.registeredBy}</span></p>
+                  </div>
+                </div>
+
+                <div className="p-3 rounded-xl bg-slate-50 border border-slate-200 space-y-1.5">
+                  <span className="font-bold text-slate-800 block text-xs">Contact & Emergency Next of Kin</span>
+                  <div className="text-[11px] space-y-1">
+                    <p><span className="text-slate-500">Primary Phone:</span> <strong className="font-mono text-slate-800">{selectedProfilePatient.contactNumber || 'None provided'}</strong></p>
+                    <p><span className="text-slate-500">Next of Kin:</span> {selectedProfilePatient.nextOfKin ? `${selectedProfilePatient.nextOfKin.name} (${selectedProfilePatient.nextOfKin.relation}) • ${selectedProfilePatient.nextOfKin.phone}` : 'No emergency contact on file'}</p>
+                    <p><span className="text-slate-500">Address:</span> {selectedProfilePatient.address || 'Address not documented'}</p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Physical Identification if unidentified */}
+              {selectedProfilePatient.isUnidentified && selectedProfilePatient.physicalIdentification && (
+                <div className="p-3 rounded-xl bg-amber-50/70 border border-amber-200 text-amber-900 space-y-1.5">
+                  <span className="font-bold text-amber-950 block text-xs">Physical Identification & Clothing Log</span>
+                  <p><strong>Clothing:</strong> {selectedProfilePatient.physicalIdentification.clothing}</p>
+                  <p><strong>Distinguishing Marks:</strong> {selectedProfilePatient.physicalIdentification.distinguishingMarks}</p>
+                  <p><strong>Found Location:</strong> {selectedProfilePatient.physicalIdentification.foundLocation}</p>
+                  <p><strong>Brought By:</strong> {selectedProfilePatient.physicalIdentification.bringingParty} ({selectedProfilePatient.physicalIdentification.bringingOfficerOrStaff})</p>
+                </div>
+              )}
+
+              {/* Known Allergies */}
+              <div className="p-3 rounded-xl bg-slate-50 border border-slate-200 flex items-center justify-between">
+                <div>
+                  <span className="font-bold text-slate-800 block text-xs">Documented Drug Allergies</span>
+                  <p className="text-[11px] text-slate-600 mt-0.5">
+                    {selectedProfilePatient.allergies?.join(', ') || 'No known allergies recorded'}
+                  </p>
+                </div>
+                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-slate-200 text-slate-700">
+                  {selectedProfilePatient.allergies?.length || 0} Listed
+                </span>
+              </div>
+            </div>
+
+            {/* Modal Footer */}
+            <div className="p-4 bg-slate-50 border-t border-slate-200 flex items-center justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  setSelectedProfilePatient(null);
+                  setIsChangingPhoto(false);
+                  setCustomPhotoUrl('');
+                }}
+                className="px-4 py-2 rounded-xl bg-teal-600 hover:bg-teal-700 text-white font-semibold text-xs shadow-xs cursor-pointer"
+              >
+                Close Profile
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Reconciliation Modal */}
       {reconcilingPatient && (

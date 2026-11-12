@@ -7,6 +7,12 @@ import {
   validateMLCRequirements,
   evaluateAtropinizationProgress,
   filterEmergencyCases,
+  resolvePatientTriageStatus,
+  getTriageBadgeConfig,
+  filterPatientAppointments,
+  filterPatientDocuments,
+  filterDoctorDirectory,
+  isClinicianVerifiedRecord,
 } from './rules';
 import { EmergencyCase, MedicoLegalCase } from '../types';
 
@@ -158,3 +164,167 @@ test('filterEmergencyCases filters by search text and unidentified state', () =>
   assert.equal(searchHit.length, 1);
   assert.equal(searchHit[0].id, 'CASE-2026-0002');
 });
+
+test('resolvePatientTriageStatus prioritizes explicit status, then vitals, then complaint', () => {
+  // Explicit override
+  const explicit = resolvePatientTriageStatus({ triageStatus: 'Critical', chiefComplaint: 'Minor cold' });
+  assert.equal(explicit, 'Critical');
+
+  // Vitals hypoxia
+  const hypoxic = resolvePatientTriageStatus({ vitalsSnapshot: { spo2: 89, pulse: 110 } });
+  assert.equal(hypoxic, 'Critical');
+
+  // Complaint with chest pain
+  const chestPain = resolvePatientTriageStatus({ chiefComplaint: 'Acute chest pain radiating to jaw' });
+  assert.equal(chestPain, 'Critical');
+
+  // Waiting appointment
+  const waiting = resolvePatientTriageStatus({ status: 'Waiting', chiefComplaint: 'Rash review' });
+  assert.equal(waiting, 'Waiting');
+
+  // Completed appointment
+  const completed = resolvePatientTriageStatus({ status: 'Completed', chiefComplaint: 'General checkup' });
+  assert.equal(completed, 'Stable');
+});
+
+test('getTriageBadgeConfig returns proper color classes, labels, and beacons', () => {
+  const critical = getTriageBadgeConfig('Critical');
+  assert.equal(critical.label, 'Critical');
+  assert.equal(critical.pingBeacon, true);
+  assert.ok(critical.badgeClass.includes('rose'));
+
+  const waiting = getTriageBadgeConfig('Waiting');
+  assert.equal(waiting.label, 'Waiting');
+  assert.equal(waiting.pingBeacon, false);
+  assert.ok(waiting.badgeClass.includes('amber'));
+
+  const stable = getTriageBadgeConfig('Stable');
+  assert.equal(stable.label, 'Stable');
+  assert.ok(stable.badgeClass.includes('emerald'));
+
+  const obs = getTriageBadgeConfig('Under Observation');
+  assert.equal(obs.label, 'Under Observation');
+  assert.ok(obs.badgeClass.includes('sky'));
+});
+
+test('filterPatientAppointments correctly filters upcoming vs past vs requested', () => {
+  const mockApts = [
+    {
+      id: 'apt-1',
+      patientId: 'p1',
+      patientName: 'Test Patient',
+      patientAge: 45,
+      patientGender: 'Male',
+      patientPhone: '999',
+      doctorName: 'Dr. Test',
+      date: '2026-11-20',
+      timeSlot: '10:00 AM',
+      tokenNumber: 1,
+      type: 'New Consultation' as const,
+      status: 'Scheduled' as const,
+      chiefComplaint: 'Checkup',
+    },
+    {
+      id: 'apt-2',
+      patientId: 'p1',
+      patientName: 'Test Patient',
+      patientAge: 45,
+      patientGender: 'Male',
+      patientPhone: '999',
+      doctorName: 'Dr. Test',
+      date: '2026-11-01',
+      timeSlot: '11:00 AM',
+      tokenNumber: 2,
+      type: 'Follow-up Review' as const,
+      status: 'Completed' as const,
+      chiefComplaint: 'Old checkup',
+    },
+    {
+      id: 'apt-3',
+      patientId: 'p1',
+      patientName: 'Test Patient',
+      patientAge: 45,
+      patientGender: 'Male',
+      patientPhone: '999',
+      doctorName: 'Dr. Test',
+      date: '2026-11-25',
+      timeSlot: '02:00 PM',
+      tokenNumber: 3,
+      type: 'Specialist Referral' as const,
+      status: 'Requested' as const,
+      chiefComplaint: 'Knee pain',
+    },
+  ];
+
+  const upcoming = filterPatientAppointments(mockApts, 'p1', 'upcoming');
+  assert.equal(upcoming.length, 2); // apt-1 and apt-3
+  assert.ok(upcoming.some((a) => a.id === 'apt-1'));
+  assert.ok(upcoming.some((a) => a.id === 'apt-3'));
+
+  const past = filterPatientAppointments(mockApts, 'p1', 'past');
+  assert.equal(past.length, 1);
+  assert.equal(past[0].id, 'apt-2');
+
+  const requested = filterPatientAppointments(mockApts, 'p1', 'requested');
+  assert.equal(requested.length, 1);
+  assert.equal(requested[0].id, 'apt-3');
+});
+
+test('filterPatientDocuments filters by category and search keywords', () => {
+  const docs = [
+    { title: 'Cath Lab Discharge Note', category: 'Discharge Summary', summary: 'LAD stent procedure', tags: ['Cardio'] },
+    { title: 'Biomarkers Troponin Report', category: 'Laboratory', summary: 'Troponin-I elevated', tags: ['Blood'] },
+    { title: 'Health Insurance Card', category: 'Patient Uploaded', summary: 'Star Health card', tags: ['TPA'] },
+  ];
+
+  const labsOnly = filterPatientDocuments(docs, 'Laboratory');
+  assert.equal(labsOnly.length, 1);
+  assert.equal(labsOnly[0].title, 'Biomarkers Troponin Report');
+
+  const searchStent = filterPatientDocuments(docs, 'All', 'stent');
+  assert.equal(searchStent.length, 1);
+  assert.equal(searchStent[0].title, 'Cath Lab Discharge Note');
+});
+
+test('filterDoctorDirectory searches name, specialty, languages and filters by consultation type', () => {
+  const doctors = [
+    {
+      name: 'Dr. Vikram Malhotra',
+      specialty: 'Cardiology',
+      qualifications: 'MD, DM',
+      languages: ['English', 'Hindi', 'Kannada'],
+      consultationTypes: ['In-Person OPD', 'Video Tele-Consult'],
+      availability: 'Available Today',
+    },
+    {
+      name: 'Dr. Rohan Iyer',
+      specialty: 'Orthopedics',
+      qualifications: 'MS Ortho',
+      languages: ['English', 'Tamil'],
+      consultationTypes: ['In-Person OPD'],
+      availability: 'Next Available Tomorrow',
+    },
+  ];
+
+  const cardio = filterDoctorDirectory(doctors, { specialty: 'Cardiology' });
+  assert.equal(cardio.length, 1);
+  assert.equal(cardio[0].name, 'Dr. Vikram Malhotra');
+
+  const videoOnly = filterDoctorDirectory(doctors, { consultationType: 'Video Tele-Consult' });
+  assert.equal(videoOnly.length, 1);
+  assert.equal(videoOnly[0].name, 'Dr. Vikram Malhotra');
+
+  const langSearch = filterDoctorDirectory(doctors, { query: 'tamil' });
+  assert.equal(langSearch.length, 1);
+  assert.equal(langSearch[0].name, 'Dr. Rohan Iyer');
+});
+
+test('isClinicianVerifiedRecord identifies verified medical records', () => {
+  assert.equal(isClinicianVerifiedRecord('Prescription'), true);
+  assert.equal(isClinicianVerifiedRecord('Discharge Summary'), true);
+  assert.equal(isClinicianVerifiedRecord('Laboratory'), true);
+  assert.equal(isClinicianVerifiedRecord('Patient Uploaded'), false);
+  assert.equal(isClinicianVerifiedRecord('Self Reported'), false);
+});
+
+

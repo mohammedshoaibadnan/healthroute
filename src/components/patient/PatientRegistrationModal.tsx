@@ -48,6 +48,7 @@ export const PatientRegistrationModal: React.FC = () => {
   const [nextOfKinPhone, setNextOfKinPhone] = useState('');
   const [abhaId, setAbhaId] = useState('');
   const [nationalId, setNationalId] = useState('');
+  const [photoUrl, setPhotoUrl] = useState('');
 
   const [errorMsg, setErrorMsg] = useState('');
   const [successCreated, setSuccessCreated] = useState<{ id: string; tempId?: string; name: string } | null>(null);
@@ -117,6 +118,7 @@ export const PatientRegistrationModal: React.FC = () => {
           : undefined,
         abhaId,
         nationalIdPlaceholder: nationalId,
+        photoUrl: photoUrl || undefined,
       });
 
       setSuccessCreated({ id: res.patient.id, name: res.patient.name });
@@ -568,6 +570,59 @@ export const PatientRegistrationModal: React.FC = () => {
                       className="w-full px-3 py-2 rounded-lg border border-slate-200 text-xs focus:border-teal-500"
                     />
                   </div>
+                </div>
+
+                {/* Patient Photo Intake */}
+                <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-bold text-slate-800">Patient Identity Photo (Optional Intake)</span>
+                    <span className="text-[10px] text-slate-500">Supports hospital face-tagging</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setPhotoUrl('/src/assets/images/pat_rameshwar_reddy_1794455154121.jpg')}
+                      className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border text-xs font-medium cursor-pointer ${
+                        photoUrl === '/src/assets/images/pat_rameshwar_reddy_1794455154121.jpg'
+                          ? 'bg-teal-50 border-teal-500 text-teal-800'
+                          : 'bg-white border-slate-200 text-slate-700'
+                      }`}
+                    >
+                      <img src="/src/assets/images/pat_rameshwar_reddy_1794455154121.jpg" alt="" referrerPolicy="no-referrer" className="w-5 h-5 rounded-full object-cover" />
+                      <span>Preset Male</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setPhotoUrl('/src/assets/images/pat_pooja_venkatesh_1794455154316.jpg')}
+                      className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border text-xs font-medium cursor-pointer ${
+                        photoUrl === '/src/assets/images/pat_pooja_venkatesh_1794455154316.jpg'
+                          ? 'bg-teal-50 border-teal-500 text-teal-800'
+                          : 'bg-white border-slate-200 text-slate-700'
+                      }`}
+                    >
+                      <img src="/src/assets/images/pat_pooja_venkatesh_1794455154316.jpg" alt="" referrerPolicy="no-referrer" className="w-5 h-5 rounded-full object-cover" />
+                      <span>Preset Female</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setPhotoUrl('/src/assets/images/pat_gopal_krishnan_1794455154918.jpg')}
+                      className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border text-xs font-medium cursor-pointer ${
+                        photoUrl === '/src/assets/images/pat_gopal_krishnan_1794455154918.jpg'
+                          ? 'bg-teal-50 border-teal-500 text-teal-800'
+                          : 'bg-white border-slate-200 text-slate-700'
+                      }`}
+                    >
+                      <img src="/src/assets/images/pat_gopal_krishnan_1794455154918.jpg" alt="" referrerPolicy="no-referrer" className="w-5 h-5 rounded-full object-cover" />
+                      <span>Preset Senior</span>
+                    </button>
+                  </div>
+                  <input
+                    type="text"
+                    placeholder="Or enter custom image URL..."
+                    value={photoUrl}
+                    onChange={(e) => setPhotoUrl(e.target.value)}
+                    className="w-full px-3 py-1.5 rounded-lg border border-slate-200 text-xs bg-white"
+                  />
                 </div>
               </div>
             )}

@@ -1,4 +1,19 @@
-export type UserRole = 'doctor' | 'nurse' | 'cmo' | 'records' | 'admin';
+export type UserRole = 'doctor' | 'nurse' | 'cmo' | 'records' | 'admin' | 'patient';
+
+export type PatientPortalTab =
+  | 'patient-home'
+  | 'patient-health'
+  | 'patient-doctors'
+  | 'patient-appointments'
+  | 'patient-prescriptions'
+  | 'patient-reports'
+  | 'patient-messages'
+  | 'patient-notifications'
+  | 'patient-emergency'
+  | 'patient-privacy'
+  | 'patient-profile';
+
+export type PatientTriageStatus = 'Stable' | 'Critical' | 'Waiting' | 'Under Observation';
 
 export interface StaffUser {
   id: string;
@@ -12,6 +27,7 @@ export interface StaffUser {
   activeShift: 'Day (08:00 - 16:00)' | 'Evening (16:00 - 00:00)' | 'Night (00:00 - 08:00)' | 'On Call';
   onDuty: boolean;
   station: string;
+  photoUrl?: string;
 }
 
 export type TriageLevel = 'RED' | 'YELLOW' | 'GREEN' | 'BLACK';
@@ -40,16 +56,29 @@ export interface Patient {
   allergies?: string[];
   contactNumber?: string;
   address?: string;
+  dateOfBirth?: string;
+  existingConditions?: string[];
+  currentMedications?: string[];
+  verifiedMedicalHistory?: string[];
+  selfReportedNotes?: string;
   nextOfKin?: {
     name: string;
     relation: string;
     phone: string;
   };
+  emergencyContact?: {
+    name: string;
+    relation: string;
+    phone: string;
+  };
+  primaryPhysician?: string;
   abhaId?: string; // Ayushman Bharat Health Account ID (e.g. 14-digit)
   nationalIdPlaceholder?: string; // e.g., Aadhaar / Voter ID mock
   physicalIdentification?: PhysicalIdentification;
   registrationTimestamp: string;
   registeredBy: string;
+  photoUrl?: string;
+  triageStatus?: PatientTriageStatus;
 }
 
 export interface CaseVitals {
@@ -61,6 +90,7 @@ export interface CaseVitals {
   gcs: number; // Glasgow Coma Scale 3-15
   bloodSugar?: number; // mg/dL
   painScore?: number; // 0-10
+  weight?: number; // kg
   recordedAt: string;
 }
 
@@ -299,3 +329,228 @@ export interface IncomingAmbulance {
   receivingBayReserved: string;
   acknowledgedByHospital: boolean;
 }
+
+export type AppointmentType = 
+  | 'New Consultation'
+  | 'Follow-up Review'
+  | 'Chronic Care Review'
+  | 'Post-Operative Check'
+  | 'Preventive Health Assessment'
+  | 'Specialist Referral';
+
+export type AppointmentStatus =
+  | 'Requested'
+  | 'Confirmed'
+  | 'Scheduled'
+  | 'Checked In'
+  | 'Waiting'
+  | 'In Consultation'
+  | 'Completed'
+  | 'Cancelled'
+  | 'Rescheduled'
+  | 'No Show';
+
+export interface Appointment {
+  id: string; // e.g. "APT-2026-012"
+  patientId: string;
+  patientName: string;
+  patientAge: number;
+  patientGender: string;
+  patientPhone: string;
+  doctorId?: string;
+  doctorName: string;
+  department?: string;
+  date: string;
+  timeSlot: string;
+  tokenNumber: number;
+  type: AppointmentType;
+  status: AppointmentStatus;
+  chiefComplaint: string;
+  consultationMode?: 'In-Person OPD' | 'Video Tele-Consult';
+  hospitalName?: string;
+  roomNo?: string;
+  roomNumber?: string;
+  notes?: string;
+  patientPhotoUrl?: string;
+  doctorPhotoUrl?: string;
+  vitalsSnapshot?: CaseVitals;
+  triageStatus?: PatientTriageStatus;
+  requestedByPatient?: boolean;
+  cancellationReason?: string;
+  createdAt?: string;
+}
+
+export interface PrescriptionItem {
+  id?: string;
+  drugName?: string;
+  medicineName?: string;
+  dosage: string; // e.g. "500 mg"
+  frequency: string; // e.g. "1-0-1 (Twice daily)"
+  duration: string; // e.g. "5 days"
+  route?: string;
+  timing?: 'Before Food' | 'After Food' | 'With Food' | 'At Bedtime' | 'As Needed';
+  instructions?: string;
+}
+
+export interface ClinicalEncounter {
+  id: string; // e.g. "ENC-2026-034"
+  appointmentId?: string;
+  patientId: string;
+  patientName: string;
+  doctorId?: string;
+  doctorName: string;
+  doctorDesignation?: string;
+  department?: string;
+  date: string;
+  type?: string;
+  encounterType?: 'OPD Consultation' | 'Inpatient Round' | 'Specialist Assessment' | 'Tele-consult';
+  chiefComplaint: string;
+  subjectiveHistory?: string;
+  historyOfPresentIllness?: string;
+  physicalExamination?: string;
+  examinationFindings?: string;
+  vitals?: CaseVitals;
+  assessmentDiagnosis?: string;
+  diagnosis?: string;
+  prescriptions: PrescriptionItem[];
+  orderedInvestigations?: string[];
+  orderedLabs?: string[];
+  followUpDate?: string;
+  clinicalAdvice?: string;
+  adviceNotes?: string;
+  status: 'Draft' | 'Finalized' | 'Signed';
+  updatedAt?: string;
+}
+
+export interface FollowUpReminder {
+  id: string;
+  patientId: string;
+  patientName: string;
+  patientPhone: string;
+  dueDate: string;
+  reason: string;
+  condition?: string;
+  category?: 'Chronic Disease Review' | 'Post-Surgical Review' | 'Lab Result Check' | 'Medication Titration' | 'Immunization';
+  urgency?: 'routine' | 'important' | 'urgent';
+  status?: 'pending' | 'contacted' | 'completed';
+  completed?: boolean;
+  attendingDoctor?: string;
+}
+
+export interface LabParameter {
+  name: string;
+  value: string;
+  unit: string;
+  referenceRange: string;
+  flag: 'Normal' | 'High' | 'Low' | 'Critical';
+}
+
+export interface DiagnosticLabReport {
+  id: string; // e.g. "LAB-2026-081"
+  patientId: string;
+  patientName: string;
+  testName: string;
+  category: 'Biochemistry' | 'Hematology' | 'Microbiology' | 'Cardiology' | 'Radiology / Imaging';
+  sampleDate?: string;
+  collectedAt?: string;
+  reportedDate?: string;
+  orderingDoctor?: string;
+  parameters: LabParameter[];
+  impression?: string;
+  clinicalNotes?: string;
+  criticalPanicValue?: boolean;
+  reviewedBy?: string;
+  status: 'Finalized' | 'Pending Review' | 'Critical Panic Alert' | 'Reviewed';
+}
+
+export interface DoctorDirectoryItem {
+  id: string;
+  name: string;
+  specialty: string;
+  subSpecialty?: string;
+  qualifications: string;
+  experienceYears: number;
+  hospitalAffiliation: string;
+  department: string;
+  languages: string[];
+  consultationFee: number;
+  availability: 'Available Today' | 'Next Available Tomorrow' | 'Available This Week';
+  availableSlots: string[];
+  consultationTypes: ('In-Person OPD' | 'Video Tele-Consult')[];
+  rating: number;
+  reviewsCount: number;
+  about: string;
+  photoUrl?: string;
+}
+
+export type PatientDocumentCategory =
+  | 'Medical History'
+  | 'Consultation'
+  | 'Prescription'
+  | 'Laboratory'
+  | 'Radiology / Imaging'
+  | 'Discharge Summary'
+  | 'Procedure / Surgery'
+  | 'Patient Uploaded';
+
+export interface PatientDocument {
+  id: string;
+  patientId: string;
+  title: string;
+  category: PatientDocumentCategory;
+  source: string; // e.g. "Apex City Hospital - Dr. Vikram Malhotra" or "Self-Uploaded"
+  date: string;
+  isVerified: boolean;
+  fileType: 'PDF' | 'IMAGE' | 'DICOM';
+  fileSize: string;
+  summary: string;
+  tags: string[];
+  downloadUrl?: string;
+}
+
+export interface PatientMessage {
+  id: string;
+  patientId: string;
+  doctorId: string;
+  doctorName: string;
+  doctorSpecialty?: string;
+  doctorPhotoUrl?: string;
+  sender: 'patient' | 'doctor' | 'system';
+  text: string;
+  timestamp: string;
+  isRead: boolean;
+  category?: 'General Query' | 'Medication Review' | 'Lab Follow-up' | 'Appointment';
+}
+
+export interface PatientNotification {
+  id: string;
+  patientId: string;
+  category: 'appointment' | 'report' | 'prescription' | 'reminder' | 'announcement';
+  title: string;
+  message: string;
+  timestamp: string;
+  isRead: boolean;
+  actionTab?: PatientPortalTab;
+  priority: 'high' | 'normal' | 'low';
+}
+
+export interface PrivacyConsentSettings {
+  emergencyAccessGranted: boolean;
+  shareWithSpecialists: boolean;
+  familyAccessGranted: boolean;
+  familyMemberName?: string;
+  anonymizedResearchConsent: boolean;
+  downloadRecordsPermitted: boolean;
+  smsEmailAlerts: boolean;
+}
+
+export interface AccessAuditRecord {
+  id: string;
+  accessorName: string;
+  accessorRole: string;
+  department: string;
+  timestamp: string;
+  purpose: string;
+  action: string;
+}
+

@@ -1,4 +1,12 @@
-import { EmergencyCase, MedicoLegalCase, PoisoningCase, TriageLevel, CaseVitals } from '../types';
+import { 
+  EmergencyCase, 
+  MedicoLegalCase, 
+  PoisoningCase, 
+  TriageLevel, 
+  CaseVitals,
+  PatientTriageStatus,
+  Appointment
+} from '../types';
 
 /**
  * Generate a standardized Indian Hospital Temporary Emergency Patient ID
@@ -214,3 +222,309 @@ export function filterEmergencyCases(
     return true;
   });
 }
+
+/**
+ * Resolves the triage status for a patient/appointment based on explicit override,
+ * vitals, emergency case link, or clinical reason.
+ */
+export function resolvePatientTriageStatus(
+  item: {
+    triageStatus?: PatientTriageStatus;
+    chiefComplaint?: string;
+    vitalsSnapshot?: Partial<CaseVitals>;
+    status?: string;
+    patientId?: string;
+    patientName?: string;
+  },
+  emergencyCases: EmergencyCase[] = []
+): PatientTriageStatus {
+  // 1. Explicit status takes precedence
+  if (item.triageStatus) {
+    return item.triageStatus;
+  }
+
+  // 2. Cross-reference with active emergency cases
+  if (item.patientId || item.patientName) {
+    const activeCase = emergencyCases.find(
+      (c) =>
+        (c.patientId === item.patientId || c.patientSnapshot.name === item.patientName) &&
+        !['Discharged', 'Transferred', 'Brought Dead / Expired'].includes(c.status)
+    );
+    if (activeCase) {
+      if (activeCase.triageLevel === 'RED' || activeCase.esiScore <= 2) {
+        return 'Critical';
+      }
+      if (activeCase.triageLevel === 'YELLOW' || activeCase.status === 'Active Triage') {
+        return 'Waiting';
+      }
+      if (activeCase.status === 'Stabilized') {
+        return 'Stable';
+      }
+      return 'Under Observation';
+    }
+  }
+
+  // 3. Physiological vital signs check
+  const v = item.vitalsSnapshot;
+  if (v) {
+    if ((v.spo2 && v.spo2 < 92) || (v.pulse && (v.pulse > 125 || v.pulse < 50)) || (v.gcs && v.gcs < 13)) {
+      return 'Critical';
+    }
+  }
+
+  // 4. Clinical complaint keywords
+  const complaint = (item.chiefComplaint || '').toLowerCase();
+  if (
+    complaint.includes('chest pain') ||
+    complaint.includes('cardiac') ||
+    complaint.includes('stent') && complaint.includes('angina') ||
+    complaint.includes('diaphoresis') ||
+    complaint.includes('severe breathlessness') ||
+    complaint.includes('poison')
+  ) {
+    return 'Critical';
+  }
+
+  // 5. Appointment status mapping
+  if (item.status === 'Waiting' || item.status === 'Checked In') {
+    return 'Waiting';
+  }
+
+  if (item.status === 'Completed') {
+    return 'Stable';
+  }
+
+  return 'Stable';
+}
+
+export interface TriageBadgeConfig {
+  label: PatientTriageStatus;
+  badgeClass: string;
+  dotClass: string;
+  pingBeacon: boolean;
+  borderClass: string;
+  bgClass: string;
+  textClass: string;
+  description: string;
+  urgencyLevel: 'high' | 'medium' | 'low';
+}
+
+/**
+ * Returns color-coded badge styling for patient triage status indicators
+ */
+export function getTriageBadgeConfig(status: PatientTriageStatus): TriageBadgeConfig {
+  switch (status) {
+    case 'Critical':
+      return {
+        label: 'Critical',
+        badgeClass: 'bg-rose-50 text-rose-800 border-rose-300 ring-1 ring-rose-400/30',
+        dotClass: 'bg-rose-600',
+        pingBeacon: true,
+        borderClass: 'border-rose-300',
+        bgClass: 'bg-rose-50',
+        textClass: 'text-rose-800',
+        description: 'Immediate clinical review / High acuity triage',
+        urgencyLevel: 'high',
+      };
+    case 'Waiting':
+      return {
+        label: 'Waiting',
+        badgeClass: 'bg-amber-50 text-amber-800 border-amber-300 ring-1 ring-amber-400/20',
+        dotClass: 'bg-amber-500',
+        pingBeacon: false,
+        borderClass: 'border-amber-300',
+        bgClass: 'bg-amber-50',
+        textClass: 'text-amber-800',
+        description: 'Waiting in lobby / Triage vitals intake pending',
+        urgencyLevel: 'medium',
+      };
+    case 'Under Observation':
+      return {
+        label: 'Under Observation',
+        badgeClass: 'bg-sky-50 text-sky-800 border-sky-300 ring-1 ring-sky-400/20',
+        dotClass: 'bg-sky-500',
+        pingBeacon: false,
+        borderClass: 'border-sky-300',
+        bgClass: 'bg-sky-50',
+        textClass: 'text-sky-800',
+        description: 'Under monitoring / Diagnostic investigations pending',
+        urgencyLevel: 'medium',
+      };
+    case 'Stable':
+    default:
+      return {
+        label: 'Stable',
+        badgeClass: 'bg-emerald-50 text-emerald-800 border-emerald-300 ring-1 ring-emerald-400/20',
+        dotClass: 'bg-emerald-600',
+        pingBeacon: false,
+        borderClass: 'border-emerald-300',
+        bgClass: 'bg-emerald-50',
+        textClass: 'text-emerald-800',
+        description: 'Physiologically stable / Ambulatory consultation',
+        urgencyLevel: 'low',
+      };
+  }
+}
+
+/**
+ * Filter patient appointments for patient portal views
+ */
+export function filterPatientAppointments(
+  appointments: Appointment[],
+  patientId: string,
+  filter: 'all' | 'upcoming' | 'past' | 'requested' | 'completed' | 'cancelled' = 'all'
+): Appointment[] {
+  const patientApts = appointments.filter((a) => a.patientId === patientId);
+  const today = new Date().toISOString().split('T')[0];
+
+  switch (filter) {
+    case 'upcoming':
+      return patientApts.filter(
+        (a) =>
+          (a.date >= today || a.status === 'Scheduled' || a.status === 'Confirmed' || a.status === 'Requested') &&
+          !['Completed', 'Cancelled'].includes(a.status)
+      );
+    case 'past':
+      return patientApts.filter(
+        (a) => a.date < today || ['Completed', 'Cancelled'].includes(a.status)
+      );
+    case 'requested':
+      return patientApts.filter((a) => a.status === 'Requested');
+    case 'completed':
+      return patientApts.filter((a) => a.status === 'Completed');
+    case 'cancelled':
+      return patientApts.filter((a) => a.status === 'Cancelled');
+    case 'all':
+    default:
+      return patientApts;
+  }
+}
+
+/**
+ * Filter patient documents by category and query
+ */
+export function filterPatientDocuments<T extends { category: string; title: string; summary?: string; tags?: string[] }>(
+  documents: T[],
+  categoryFilter: string = 'All',
+  searchQuery: string = ''
+): T[] {
+  return documents.filter((doc) => {
+    const matchesCategory =
+      categoryFilter === 'All' || doc.category.toLowerCase() === categoryFilter.toLowerCase();
+    
+    if (!matchesCategory) return false;
+
+    if (!searchQuery.trim()) return true;
+
+    const q = searchQuery.toLowerCase();
+    const inTitle = doc.title.toLowerCase().includes(q);
+    const inSummary = doc.summary ? doc.summary.toLowerCase().includes(q) : false;
+    const inTags = doc.tags ? doc.tags.some((t) => t.toLowerCase().includes(q)) : false;
+
+    return inTitle || inSummary || inTags;
+  });
+}
+
+/**
+ * Filter doctor discovery directory
+ */
+export function filterDoctorDirectory<T extends { name: string; specialty: string; subSpecialty?: string; qualifications: string; languages?: string[]; consultationTypes?: string[]; availability?: string }>(
+  doctors: T[],
+  params: {
+    query?: string;
+    specialty?: string;
+    consultationType?: string;
+    availability?: string;
+  }
+): T[] {
+  return doctors.filter((doc) => {
+    if (params.specialty && params.specialty !== 'All Specialties') {
+      if (!doc.specialty.toLowerCase().includes(params.specialty.toLowerCase())) {
+        return false;
+      }
+    }
+
+    if (params.consultationType && params.consultationType !== 'All Types') {
+      if (!doc.consultationTypes || !doc.consultationTypes.includes(params.consultationType)) {
+        return false;
+      }
+    }
+
+    if (params.availability && params.availability !== 'All Availability') {
+      if (doc.availability !== params.availability) {
+        return false;
+      }
+    }
+
+    if (params.query && params.query.trim()) {
+      const q = params.query.toLowerCase().trim();
+      const inName = doc.name.toLowerCase().includes(q);
+      const inSpec = doc.specialty.toLowerCase().includes(q);
+      const inSub = doc.subSpecialty ? doc.subSpecialty.toLowerCase().includes(q) : false;
+      const inQual = doc.qualifications.toLowerCase().includes(q);
+      const inLang = doc.languages ? doc.languages.some((l) => l.toLowerCase().includes(q)) : false;
+
+      return inName || inSpec || inSub || inQual || inLang;
+    }
+
+    return true;
+  });
+}
+
+/**
+ * Computes health overview stats for a patient
+ */
+export function calculatePatientHealthMetrics(
+  patientId: string,
+  appointments: Appointment[],
+  encounters: Array<{ patientId: string; prescriptions?: unknown[] }>,
+  labReports: Array<{ patientId: string; status: string }>
+): {
+  upcomingCount: number;
+  pendingReportsCount: number;
+  activePrescriptionsCount: number;
+  completedVisitsCount: number;
+} {
+  const patientApts = appointments.filter((a) => a.patientId === patientId);
+  const today = new Date().toISOString().split('T')[0];
+
+  const upcomingCount = patientApts.filter(
+    (a) =>
+      (a.date >= today || a.status === 'Scheduled' || a.status === 'Confirmed' || a.status === 'Requested') &&
+      !['Completed', 'Cancelled'].includes(a.status)
+  ).length;
+
+  const completedVisitsCount = patientApts.filter((a) => a.status === 'Completed').length;
+
+  const patientLabs = labReports.filter((l) => l.patientId === patientId);
+  const pendingReportsCount = patientLabs.filter((l) => l.status === 'Pending Review').length;
+
+  const patientEncounters = encounters.filter((e) => e.patientId === patientId);
+  const activePrescriptionsCount = patientEncounters.reduce((acc, curr) => {
+    return acc + (curr.prescriptions ? curr.prescriptions.length : 0);
+  }, 0);
+
+  return {
+    upcomingCount,
+    pendingReportsCount,
+    activePrescriptionsCount,
+    completedVisitsCount,
+  };
+}
+
+/**
+ * Checks if a record category is clinician-verified (read-only for patient)
+ */
+export function isClinicianVerifiedRecord(category: string): boolean {
+  const verifiedCategories = [
+    'consultation',
+    'prescription',
+    'laboratory',
+    'radiology / imaging',
+    'discharge summary',
+    'procedure / surgery',
+    'medical history',
+  ];
+  return verifiedCategories.includes(category.toLowerCase());
+}
+
