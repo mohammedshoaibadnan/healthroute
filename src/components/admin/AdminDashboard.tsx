@@ -143,7 +143,7 @@ export const AdminDashboard: React.FC = () => {
                             src={staff.photoUrl}
                             name={staff.name}
                             size="sm"
-                            gender={staff.name.includes('Ananya') || staff.name.includes('Rekha') || staff.name.includes('Radhika') ? 'Female' : 'Male'}
+                            gender={staff.gender || (staff.name.includes('Ananya') || staff.name.includes('Rekha') || staff.name.includes('Radhika') || staff.name.includes('Priya') || staff.name.includes('Sneha') ? 'Female' : 'Male')}
                             status={staff.onDuty ? 'online' : undefined}
                           />
                           <div>
@@ -151,6 +151,11 @@ export const AdminDashboard: React.FC = () => {
                             <div className="text-[11px] text-slate-500 font-mono">
                               ID: {staff.employeeCode} • {staff.email}
                             </div>
+                            {staff.qualifications && (
+                              <div className="text-[10px] text-teal-700 font-medium mt-0.5">
+                                {staff.qualifications} {staff.experienceYears ? `(${staff.experienceYears} yrs exp)` : ''}
+                              </div>
+                            )}
                           </div>
                         </div>
                       </td>
@@ -162,10 +167,16 @@ export const AdminDashboard: React.FC = () => {
                         <div className="text-[11px] text-slate-600 font-medium mt-0.5">
                           {staff.designation}
                         </div>
+                        {staff.specialty && (
+                          <div className="text-[10px] text-slate-500">{staff.specialty}</div>
+                        )}
                       </td>
 
                       <td className="py-3 px-3 text-slate-600">
-                        {staff.department}
+                        <div>{staff.department}</div>
+                        {staff.hospitalAffiliation && (
+                          <div className="text-[10px] text-slate-400 mt-0.5">{staff.hospitalAffiliation}</div>
+                        )}
                       </td>
 
                       <td className="py-3 px-3">
@@ -178,7 +189,7 @@ export const AdminDashboard: React.FC = () => {
                       <td className="py-3 px-3">
                         <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
                           <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
-                          On Active Duty
+                          {staff.availability || 'On Active Duty'}
                         </span>
                       </td>
 
@@ -232,6 +243,7 @@ export const AdminDashboard: React.FC = () => {
                 <option value="cmo">Casualty Medical Officers (CMO)</option>
                 <option value="nurse">Nurses</option>
                 <option value="records">Records Staff</option>
+                <option value="pharmacist">Pharmacists</option>
                 <option value="admin">Administrators</option>
               </select>
             </div>

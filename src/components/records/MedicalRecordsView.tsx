@@ -20,18 +20,20 @@ import { DiagnosticLabReport } from '../../types';
 export const MedicalRecordsView: React.FC = () => {
   const {
     labReports,
-    patients,
+    acknowledgeLabReport,
     currentUser,
-    logAuditAction
   } = useApp();
 
-  const [reports, setReports] = useState<DiagnosticLabReport[]>(labReports);
-  const [selectedReportId, setSelectedReportId] = useState<string>(reports[0]?.id || '');
+  const [selectedReportId, setSelectedReportId] = useState<string>(labReports[0]?.id || '');
   const [searchQuery, setSearchQuery] = useState('');
   const [filterPanic, setFilterPanic] = useState(false);
 
-  const filteredReports = reports.filter((r) => {
-    if (filterPanic && !r.criticalPanicValue) return false;
+  const filteredReports = labReports.filter((r) => {
+    const isCritical =
+      r.criticalPanicValue ||
+      r.status === 'Critical Panic Alert' ||
+      r.parameters?.some((p) => p.flag === 'Critical');
+    if (filterPanic && !isCritical) return false;
     if (searchQuery.trim()) {
       const q = searchQuery.toLowerCase();
       return (
@@ -44,27 +46,10 @@ export const MedicalRecordsView: React.FC = () => {
     return true;
   });
 
-  const activeReport = reports.find((r) => r.id === selectedReportId) || reports[0];
+  const activeReport = labReports.find((r) => r.id === selectedReportId) || labReports[0];
 
   const handleAcknowledge = (reportId: string) => {
-    setReports((prev) =>
-      prev.map((r) => {
-        if (r.id === reportId) {
-          return {
-            ...r,
-            status: 'Reviewed',
-            reviewedBy: currentUser.name,
-          };
-        }
-        return r;
-      })
-    );
-    logAuditAction(
-      'Diagnostic Report Acknowledged',
-      'SYSTEM',
-      reportId,
-      `Dr. ${currentUser.name} reviewed and acknowledged laboratory findings for ${activeReport?.patientName}`
-    );
+    acknowledgeLabReport(reportId);
   };
 
   const getFlagBadge = (flag?: string) => {
@@ -111,7 +96,7 @@ export const MedicalRecordsView: React.FC = () => {
             }`}
           >
             <AlertCircle className={`w-3.5 h-3.5 ${filterPanic ? 'text-rose-600' : 'text-slate-400'}`} />
-            <span>Critical Panic Values ({reports.filter((r) => r.criticalPanicValue).length})</span>
+            <span>Critical Panic Values ({labReports.filter((r) => r.criticalPanicValue || r.status === 'Critical Panic Alert').length})</span>
           </button>
         </div>
       </div>
@@ -123,7 +108,7 @@ export const MedicalRecordsView: React.FC = () => {
           <div className="p-3.5 border-b border-slate-200/80 bg-slate-50/75 space-y-2.5">
             <div className="flex items-center justify-between">
               <span className="text-xs font-bold uppercase tracking-wider text-slate-600">
-                Reports ({reports.length})
+                Reports ({labReports.length})
               </span>
               <span className="text-[11px] text-teal-700 font-semibold">NABL Accredited</span>
             </div>

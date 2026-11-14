@@ -20,7 +20,7 @@ import {
 } from 'lucide-react';
 import { Avatar } from '../../common/Avatar';
 import { HOSPITAL_INFO } from '../../../data/mockData';
-import { filterPatientAppointments, calculatePatientHealthMetrics } from '../../../utils/rules';
+import { filterPatientAppointments, calculatePatientHealthMetrics, getAppointmentStatusBadge, derivePatientMedicationRegimen } from '../../../utils/rules';
 
 export const PatientHomeView: React.FC = () => {
   const { 
@@ -38,9 +38,16 @@ export const PatientHomeView: React.FC = () => {
   } = useApp();
 
   const metrics = calculatePatientHealthMetrics(activePatient.id, appointments, encounters, labReports);
+  const activeRegimenCount = derivePatientMedicationRegimen(activePatient, encounters).activeMedications.length;
   const upcomingApts = filterPatientAppointments(appointments, activePatient.id, 'upcoming');
   const recentDocs = patientDocuments.filter((d) => d.patientId === activePatient.id).slice(0, 3);
-  const unreadNotifs = patientNotifications.filter((n) => n.patientId === activePatient.id && !n.isRead);
+  const unreadNotifs = patientNotifications.filter(
+    (n) =>
+      n.patientId === activePatient.id &&
+      !n.isRead &&
+      n.targetAudience !== 'doctor' &&
+      n.targetAudience !== 'pharmacy'
+  );
 
   // Time-based greeting
   const getGreeting = () => {
@@ -143,7 +150,7 @@ export const PatientHomeView: React.FC = () => {
             </span>
           </div>
           <div className="mt-3">
-            <p className="text-2xl sm:text-3xl font-extrabold text-slate-900">{activePatient.currentMedications?.length || 4}</p>
+            <p className="text-2xl sm:text-3xl font-extrabold text-slate-900">{activeRegimenCount}</p>
             <p className="text-xs text-slate-500 mt-0.5 font-medium">Prescribed Medications</p>
           </div>
         </div>
@@ -296,56 +303,76 @@ export const PatientHomeView: React.FC = () => {
             </div>
           ) : (
             <div className="space-y-3">
-              {upcomingApts.map((apt) => (
-                <div
-                  key={apt.id}
-                  className="p-4 sm:p-5 rounded-2xl bg-white border border-slate-200/80 shadow-xs hover:border-slate-300 transition-all flex flex-col sm:flex-row sm:items-center justify-between gap-4"
-                >
-                  <div className="flex items-start sm:items-center gap-3.5">
-                    <Avatar src={apt.doctorPhotoUrl} name={apt.doctorName} size="lg" />
-                    <div className="space-y-0.5">
-                      <div className="flex items-center gap-2">
-                        <span className="font-bold text-slate-900 text-sm">{apt.doctorName}</span>
-                        <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
-                          apt.status === 'Requested'
-                            ? 'bg-amber-100 text-amber-800 border border-amber-200'
-                            : apt.status === 'Confirmed' || apt.status === 'Scheduled'
-                            ? 'bg-teal-100 text-teal-800 border border-teal-200'
-                            : 'bg-slate-100 text-slate-700'
-                        }`}>
-                          {apt.status}
-                        </span>
-                      </div>
-                      <p className="text-xs text-teal-700 font-medium">{apt.department || 'Cardiology & Internal Medicine'}</p>
-                      <div className="flex flex-wrap items-center gap-3 text-[11px] text-slate-500 pt-1">
-                        <span className="flex items-center gap-1 font-semibold text-slate-700">
-                          <Calendar className="w-3.5 h-3.5 text-slate-400" />
-                          {apt.date}
-                        </span>
-                        <span className="flex items-center gap-1 font-semibold text-slate-700">
-                          <Clock className="w-3.5 h-3.5 text-slate-400" />
-                          {apt.timeSlot}
-                        </span>
-                        <span>Room: {apt.roomNo || 'OPD Room 204'}</span>
-                      </div>
-                      <p className="text-[11px] text-slate-500 italic pt-1">"{apt.chiefComplaint}"</p>
-                    </div>
-                  </div>
+              {upcomingApts.map((apt) => {
+                const hasPendingProposal =
+                  apt.status === 'Rescheduled' &&
+                  Boolean(apt.proposedDate && apt.proposedTimeSlot) &&
+                  apt.rescheduleResponseStatus !== 'Rejected';
 
-                  <div className="flex sm:flex-col items-center sm:items-end justify-between sm:justify-center gap-2 shrink-0 border-t sm:border-t-0 pt-2 sm:pt-0 border-slate-100">
-                    <span className="text-[10px] font-mono font-bold text-slate-500 bg-slate-100 px-2.5 py-1 rounded-lg">
-                      Token #{apt.tokenNumber}
-                    </span>
-                    <button
-                      onClick={() => setActiveTab('patient-appointments')}
-                      className="text-xs font-semibold text-teal-700 hover:text-teal-900 flex items-center gap-1 cursor-pointer"
-                    >
-                      <span>Manage</span>
-                      <ChevronRight className="w-3.5 h-3.5" />
-                    </button>
+                return (
+                  <div
+                    key={apt.id}
+                    className="p-4 sm:p-5 rounded-2xl bg-white border border-slate-200/80 shadow-xs hover:border-slate-300 transition-all flex flex-col gap-3"
+                  >
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                      <div className="flex items-start sm:items-center gap-3.5">
+                        <Avatar src={apt.doctorPhotoUrl} name={apt.doctorName} size="lg" />
+                        <div className="space-y-0.5">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className="font-bold text-slate-900 text-sm">{apt.doctorName}</span>
+                            <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${getAppointmentStatusBadge(apt.status)}`}>
+                              {apt.status}
+                            </span>
+                            {apt.acceptedByDoctorName && apt.status === 'Scheduled' && (
+                              <span className="text-[10px] font-semibold text-emerald-800 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
+                                Accepted by {apt.acceptedByDoctorName}
+                              </span>
+                            )}
+                          </div>
+                          <p className="text-xs text-teal-700 font-medium">{apt.department || 'Cardiology & Internal Medicine'}</p>
+                          <div className="flex flex-wrap items-center gap-3 text-[11px] text-slate-500 pt-1">
+                            <span className="flex items-center gap-1 font-semibold text-slate-700">
+                              <Calendar className="w-3.5 h-3.5 text-slate-400" />
+                              {apt.date}
+                            </span>
+                            <span className="flex items-center gap-1 font-semibold text-slate-700">
+                              <Clock className="w-3.5 h-3.5 text-slate-400" />
+                              {apt.timeSlot}
+                            </span>
+                            <span>Room: {apt.roomNo || 'OPD Room 204'}</span>
+                          </div>
+                          <p className="text-[11px] text-slate-500 italic pt-1">"{apt.chiefComplaint}"</p>
+                        </div>
+                      </div>
+
+                      <div className="flex sm:flex-col items-center sm:items-end justify-between sm:justify-center gap-2 shrink-0 border-t sm:border-t-0 pt-2 sm:pt-0 border-slate-100">
+                        <span className="text-[10px] font-mono font-bold text-slate-500 bg-slate-100 px-2.5 py-1 rounded-lg">
+                          Token #{apt.tokenNumber}
+                        </span>
+                        <button
+                          onClick={() => setActiveTab('patient-appointments')}
+                          className="text-xs font-semibold text-teal-700 hover:text-teal-900 flex items-center gap-1 cursor-pointer"
+                        >
+                          <span>{hasPendingProposal ? 'Review Proposal' : 'Manage'}</span>
+                          <ChevronRight className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    </div>
+
+                    {hasPendingProposal && (
+                      <div
+                        onClick={() => setActiveTab('patient-appointments')}
+                        className="p-2.5 rounded-xl bg-indigo-50 border border-indigo-200 text-[11px] text-indigo-950 flex flex-wrap items-center justify-between gap-2 cursor-pointer hover:bg-indigo-100/70 transition-colors"
+                      >
+                        <span>
+                          <strong>Action Needed:</strong> {apt.rescheduleProposedBy || apt.doctorName} proposed a new slot ({apt.proposedDate} at {apt.proposedTimeSlot}). Original request ({apt.originalDate || apt.date} at {apt.originalTimeSlot || apt.timeSlot}) is preserved.
+                        </span>
+                        <span className="font-bold text-indigo-700 underline shrink-0">Accept or Reject →</span>
+                      </div>
+                    )}
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           )}
         </div>

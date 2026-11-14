@@ -5,6 +5,7 @@ import {
   Calendar, 
   FileText, 
   Pill, 
+  MessageSquare,
   CheckCheck, 
   Clock, 
   AlertCircle, 
@@ -20,12 +21,18 @@ export const PatientNotificationsView: React.FC = () => {
     markNotificationRead, 
     markAllNotificationsRead, 
     setActiveTab, 
+    setSelectedConversationId,
     activePatient 
   } = useApp();
 
-  const [categoryFilter, setCategoryFilter] = useState<'all' | 'appointment' | 'report' | 'prescription' | 'reminder'>('all');
+  const [categoryFilter, setCategoryFilter] = useState<'all' | 'appointment' | 'message' | 'report' | 'prescription' | 'pharmacy' | 'reminder'>('all');
 
-  const notifications = patientNotifications.filter((n) => n.patientId === activePatient.id);
+  const notifications = patientNotifications.filter(
+    (n) =>
+      n.patientId === activePatient.id &&
+      n.targetAudience !== 'doctor' &&
+      n.targetAudience !== 'pharmacy'
+  );
 
   const filteredNotifs = notifications.filter((n) => {
     if (categoryFilter === 'all') return true;
@@ -38,9 +45,12 @@ export const PatientNotificationsView: React.FC = () => {
     switch (category) {
       case 'appointment':
         return <Calendar className="w-4 h-4 text-teal-600" />;
+      case 'message':
+        return <MessageSquare className="w-4 h-4 text-emerald-600" />;
       case 'report':
         return <FileText className="w-4 h-4 text-blue-600" />;
       case 'prescription':
+      case 'pharmacy':
         return <Pill className="w-4 h-4 text-purple-600" />;
       case 'reminder':
       default:
@@ -50,6 +60,9 @@ export const PatientNotificationsView: React.FC = () => {
 
   const handleNotificationClick = (notif: PatientNotification) => {
     markNotificationRead(notif.id);
+    if (notif.conversationId) {
+      setSelectedConversationId(notif.conversationId);
+    }
     if (notif.actionTab) {
       setActiveTab(notif.actionTab);
     }
@@ -69,7 +82,7 @@ export const PatientNotificationsView: React.FC = () => {
             )}
           </div>
           <p className="text-xs text-slate-500 mt-0.5">
-            Real-time appointment schedule changes, newly published lab investigation sheets, and doctor reminders
+            Real-time appointment schedule changes, doctor message replies, newly published lab investigation sheets, and reminders
           </p>
         </div>
 
@@ -89,8 +102,10 @@ export const PatientNotificationsView: React.FC = () => {
         {[
           { id: 'all', label: 'All Notifications' },
           { id: 'appointment', label: 'Appointments' },
+          { id: 'message', label: 'Doctor Replies' },
           { id: 'report', label: 'Lab Reports' },
           { id: 'prescription', label: 'Prescriptions' },
+          { id: 'pharmacy', label: 'Pharmacy' },
           { id: 'reminder', label: 'Care Reminders' },
         ].map((tab) => (
           <button

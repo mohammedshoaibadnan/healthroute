@@ -234,27 +234,37 @@ export const DocumentPreviewModal: React.FC = () => {
             <div className="space-y-4">
               <div className="flex items-center justify-between pb-2 border-b border-slate-200">
                 <div>
-                  <h4 className="text-sm font-bold text-slate-900">Clinical Consultation Record</h4>
-                  <p className="text-[11px] text-slate-500">Encounter: {previewEncounter.encounterType || 'OPD'} • Dr. {previewEncounter.doctorName}</p>
+                  <h4 className="text-sm font-bold text-slate-900">Clinical Consultation &amp; Prescription Record ({previewEncounter.id})</h4>
+                  <p className="text-[11px] text-slate-500">
+                    Encounter: {previewEncounter.encounterType || 'OPD'} •{' '}
+                    {previewEncounter.doctorName?.toLowerCase().startsWith('dr.')
+                      ? previewEncounter.doctorName
+                      : `Dr. ${previewEncounter.doctorName}`}{' '}
+                    • Date: {previewEncounter.date}
+                  </p>
                 </div>
                 <span className="text-[11px] font-semibold text-teal-800 bg-teal-50 px-2 py-0.5 rounded border border-teal-200">
-                  {previewEncounter.status}
+                  Rx: {previewEncounter.prescriptionStatus || previewEncounter.status}
                 </span>
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
                 <div className="p-3 rounded-xl bg-slate-50 border border-slate-200 space-y-1">
-                  <p className="text-[10px] font-bold uppercase text-slate-400">Chief Complaint & Subjective History</p>
+                  <p className="text-[10px] font-bold uppercase text-slate-400">Chief Complaint &amp; Subjective History</p>
                   <p className="text-slate-800 font-medium">{previewEncounter.chiefComplaint}</p>
-                  {previewEncounter.subjectiveHistory && (
-                    <p className="text-slate-600 text-[11px] mt-1">{previewEncounter.subjectiveHistory}</p>
+                  {(previewEncounter.subjectiveHistory || previewEncounter.historyOfPresentIllness) && (
+                    <p className="text-slate-600 text-[11px] mt-1">
+                      {previewEncounter.subjectiveHistory || previewEncounter.historyOfPresentIllness}
+                    </p>
                   )}
                 </div>
                 <div className="p-3 rounded-xl bg-slate-50 border border-slate-200 space-y-1">
-                  <p className="text-[10px] font-bold uppercase text-slate-400">Clinician Assessment & Diagnosis</p>
-                  <p className="text-slate-900 font-bold">{previewEncounter.assessmentDiagnosis || 'Clinical Assessment Completed'}</p>
-                  {previewEncounter.clinicalAdvice && (
-                    <p className="text-slate-600 text-[11px] mt-1">{previewEncounter.clinicalAdvice}</p>
+                  <p className="text-[10px] font-bold uppercase text-slate-400">Clinician Assessment &amp; Diagnosis</p>
+                  <p className="text-slate-900 font-bold">{previewEncounter.assessmentDiagnosis || previewEncounter.diagnosis || 'Clinical Assessment Completed'}</p>
+                  {(previewEncounter.clinicalAdvice || previewEncounter.adviceNotes) && (
+                    <p className="text-slate-600 text-[11px] mt-1">
+                      {previewEncounter.clinicalAdvice || previewEncounter.adviceNotes}
+                    </p>
                   )}
                 </div>
               </div>
@@ -270,21 +280,43 @@ export const DocumentPreviewModal: React.FC = () => {
                     <table className="w-full text-left text-xs">
                       <thead className="bg-slate-100 text-slate-600 uppercase text-[10px] font-bold">
                         <tr>
-                          <th className="px-3 py-2">Medicine Name</th>
-                          <th className="px-3 py-2">Dosage</th>
+                          <th className="px-3 py-2">Medicine &amp; Strength</th>
+                          <th className="px-3 py-2">Dosage &amp; Route</th>
                           <th className="px-3 py-2">Frequency</th>
                           <th className="px-3 py-2">Duration</th>
                           <th className="px-3 py-2">Instructions</th>
+                          <th className="px-3 py-2">Status</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-slate-100">
                         {previewEncounter.prescriptions.map((rx, idx) => (
-                          <tr key={idx}>
-                            <td className="px-3 py-2 font-bold text-slate-900">{rx.drugName || rx.medicineName}</td>
-                            <td className="px-3 py-2 text-slate-700">{rx.dosage}</td>
+                          <tr key={rx.id || idx}>
+                            <td className="px-3 py-2 font-bold text-slate-900">
+                              <div>{rx.drugName || rx.medicineName}</div>
+                              {rx.strength && (
+                                <span className="text-[10px] font-normal text-slate-500">
+                                  Strength: {rx.strength}
+                                </span>
+                              )}
+                            </td>
+                            <td className="px-3 py-2 text-slate-700">
+                              <div>{rx.dosage}</div>
+                              <span className="text-[10px] text-slate-500">{rx.route || 'Oral'}</span>
+                            </td>
                             <td className="px-3 py-2 text-slate-700">{rx.frequency}</td>
                             <td className="px-3 py-2 text-slate-700">{rx.duration}</td>
                             <td className="px-3 py-2 text-slate-600 text-[11px]">{rx.instructions || rx.timing || 'As directed'}</td>
+                            <td className="px-3 py-2">
+                              <span className={`inline-block px-2 py-0.5 rounded text-[10px] font-bold ${
+                                rx.status === 'Discontinued'
+                                  ? 'bg-rose-100 text-rose-800'
+                                  : rx.status === 'Draft'
+                                  ? 'bg-amber-100 text-amber-800'
+                                  : 'bg-emerald-100 text-emerald-800'
+                              }`}>
+                                {rx.status || 'Active'}
+                              </span>
+                            </td>
                           </tr>
                         ))}
                       </tbody>

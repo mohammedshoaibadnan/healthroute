@@ -6,6 +6,7 @@ import {
   CalendarClock,
   Stethoscope,
   ClipboardList,
+  MessageSquare,
   AlertCircle,
   Truck,
   FileText,
@@ -14,9 +15,18 @@ import {
   Database,
   Building2,
   ChevronRight,
-  HeartPulse
+  HeartPulse,
+  Pill
 } from 'lucide-react';
 import { Avatar } from '../common/Avatar';
+import { useAuth } from '../../context/AuthContext';
+import {
+  getVisibleConversationsForStaff,
+  getUnreadMessageCountForConversation,
+  isConversationAwaitingDoctorReply,
+  getMedicineStockSummary,
+  getPrescriptionDispensingSummary,
+} from '../../utils/rules';
 
 interface NavItem {
   id: NavigationTab;
@@ -35,12 +45,18 @@ export const Sidebar: React.FC = () => {
     patients,
     appointments,
     encounters,
+    conversations,
+    patientMessages,
     transfers,
+    pharmacyMedicines,
+    pharmacyBatches,
+    pharmacyDispensingRecords,
     currentUser,
     switchRole,
     setPortalMode,
     setIsFirebaseArchitectureOpen,
   } = useApp();
+  const { authMode, setIsAuthModalOpen } = useAuth();
 
   const unidentifiedCount = patients.filter((p) => p.isUnidentified).length;
   const todayDate = new Date().toISOString().split('T')[0];
@@ -50,6 +66,27 @@ export const Sidebar: React.FC = () => {
     (c) => !['Discharged', 'Transferred', 'Brought Dead / Expired'].includes(c.status)
   );
   const activeTransfers = transfers.filter((t) => t.status === 'Ambulance En-Route' || t.status === 'Initiated');
+
+  const pendingPharmacyRx = encounters.filter((enc) => {
+    if (enc.status === 'Draft' || enc.prescriptionStatus === 'Draft' || enc.prescriptionStatus === 'Discontinued') {
+      return false;
+    }
+    return getPrescriptionDispensingSummary(enc, pharmacyDispensingRecords).overallStatus !== 'Fully Dispensed';
+  }).length;
+  const lowStockCount = pharmacyMedicines.filter((med) => {
+    if (med.status !== 'Active') return false;
+    const s = getMedicineStockSummary(med, pharmacyBatches, todayDate).stockStatus;
+    return s === 'Low Stock' || s === 'Out of Stock';
+  }).length;
+
+  const doctorConversations = getVisibleConversationsForStaff(conversations, currentUser, 'Active');
+  const unreadPatientMsgs = doctorConversations.reduce(
+    (sum, conv) => sum + getUnreadMessageCountForConversation(patientMessages, conv.id, 'Doctor'),
+    0
+  );
+  const awaitingReplyThreads = doctorConversations.filter((conv) =>
+    isConversationAwaitingDoctorReply(patientMessages, conv.id)
+  ).length;
 
   const clinicalItems: NavItem[] = [
     {
@@ -88,9 +125,37 @@ export const Sidebar: React.FC = () => {
       icon: ClipboardList,
       description: 'Lab investigations & diagnostics',
     },
+    {
+      id: 'messages',
+      label: 'Messages',
+      icon: MessageSquare,
+      badge:
+        unreadPatientMsgs > 0
+          ? `${unreadPatientMsgs} New`
+          : awaitingReplyThreads > 0
+          ? `${awaitingReplyThreads} Pending`
+          : doctorConversations.length > 0
+          ? doctorConversations.length
+          : undefined,
+      badgeColor:
+        unreadPatientMsgs > 0
+          ? 'bg-purple-100 text-purple-800 border border-purple-200 font-bold'
+          : awaitingReplyThreads > 0
+          ? 'bg-amber-100 text-amber-800 border border-amber-200'
+          : 'bg-slate-100 text-slate-700',
+      description: 'Patient queries & follow-ups',
+    },
   ];
 
   const hospitalItems: NavItem[] = [
+    {
+      id: 'pharmacy',
+      label: 'Hospital Pharmacy',
+      icon: Pill,
+      badge: pendingPharmacyRx > 0 ? `${pendingPharmacyRx} Rx` : lowStockCount > 0 ? `${lowStockCount} Low` : undefined,
+      badgeColor: pendingPharmacyRx > 0 ? 'bg-indigo-100 text-indigo-800 border border-indigo-200 font-bold' : 'bg-amber-100 text-amber-800 border border-amber-200',
+      description: 'Formulary, batches & dispensing',
+    },
     {
       id: 'emergency',
       label: 'Emergency Care',
@@ -276,14 +341,19 @@ export const Sidebar: React.FC = () => {
           </div>
 
           <div className="px-1 text-[10px] font-bold uppercase tracking-wider text-slate-400 flex items-center justify-between">
-            <span>Role Simulation</span>
+            <span>{authMode === 'authenticated_supabase' ? 'Session Locked (DB)' : 'Role Simulation'}</span>
             <span className="text-teal-700 font-semibold">{currentUser.role.toUpperCase()}</span>
           </div>
-          <div className="grid grid-cols-6 gap-1 text-[10px] font-semibold text-center">
-            {(['doctor', 'cmo', 'nurse', 'records', 'admin', 'patient'] as const).map((r) => (
+          <div className="grid grid-cols-4 gap-1 text-[10px] font-semibold text-center">
+            {(['doctor', 'cmo', 'nurse', 'records', 'pharmacist', 'admin', 'patient'] as const).map((r) => (
               <button
                 key={r}
-                onClick={() => switchRole(r)}
+                onClick={() => {
+                  switchRole(r);
+                  if (r === 'pharmacist') {
+                    setActiveTab('pharmacy');
+                  }
+                }}
                 className={`py-1.5 rounded-lg capitalize transition-all border cursor-pointer ${
                   currentUser.role === r
                     ? 'bg-[#0b192e] text-white border-slate-900 font-bold shadow-xs'
@@ -291,10 +361,36 @@ export const Sidebar: React.FC = () => {
                 }`}
                 title={`Switch to ${r.toUpperCase()} role`}
               >
-                {r === 'records' ? 'Rec' : r === 'patient' ? 'Pt' : r}
+                {r === 'records'
+                  ? 'Rec'
+                  : r === 'patient'
+                  ? 'Pt'
+                  : r === 'pharmacist'
+                  ? 'Pharm'
+                  : r}
               </button>
             ))}
           </div>
+        </div>
+
+        {/* Supabase Auth & Session Authority Trigger */}
+        <div
+          onClick={() => setIsAuthModalOpen(true)}
+          className="p-2.5 rounded-xl bg-white border border-slate-200/80 text-slate-700 text-xs cursor-pointer hover:border-teal-500 transition-all shadow-xs flex items-center justify-between"
+        >
+          <div className="flex items-center gap-2">
+            <ShieldCheck className="w-3.5 h-3.5 text-teal-600" />
+            <span className="font-semibold text-slate-800 text-[11px]">Supabase Auth</span>
+          </div>
+          <span
+            className={`text-[9px] font-bold px-2 py-0.5 rounded-full border ${
+              authMode === 'authenticated_supabase'
+                ? 'text-emerald-700 bg-emerald-50 border-emerald-200'
+                : 'text-amber-700 bg-amber-50 border-amber-200'
+            }`}
+          >
+            {authMode === 'authenticated_supabase' ? 'VERIFIED DB' : 'DEMO SANDBOX'}
+          </span>
         </div>
 
         {/* Database Architecture Trigger */}

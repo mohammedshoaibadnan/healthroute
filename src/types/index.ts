@@ -1,4 +1,4 @@
-export type UserRole = 'doctor' | 'nurse' | 'cmo' | 'records' | 'admin' | 'patient';
+export type UserRole = 'doctor' | 'nurse' | 'cmo' | 'records' | 'admin' | 'pharmacist' | 'patient';
 
 export type PatientPortalTab =
   | 'patient-home'
@@ -28,6 +28,12 @@ export interface StaffUser {
   onDuty: boolean;
   station: string;
   photoUrl?: string;
+  specialty?: string;
+  qualifications?: string;
+  experienceYears?: number;
+  hospitalAffiliation?: string;
+  availability?: 'Available Today' | 'Next Available Tomorrow' | 'Available This Week';
+  gender?: 'Male' | 'Female';
 }
 
 export type TriageLevel = 'RED' | 'YELLOW' | 'GREEN' | 'BLACK';
@@ -71,10 +77,21 @@ export interface Patient {
     relation: string;
     phone: string;
   };
+  primaryPhysicianId?: string;
   primaryPhysician?: string;
   abhaId?: string; // Ayushman Bharat Health Account ID (e.g. 14-digit)
   nationalIdPlaceholder?: string; // e.g., Aadhaar / Voter ID mock
   physicalIdentification?: PhysicalIdentification;
+  reconciledToPatientId?: string;
+  reconciliationHistory?: Array<{
+    previousTempId?: string;
+    previousName: string;
+    verifiedName: string;
+    permanentMrn: string;
+    reconciledByStaffId?: string;
+    reconciledByName: string;
+    reconciledAt: string;
+  }>;
   registrationTimestamp: string;
   registeredBy: string;
   photoUrl?: string;
@@ -144,7 +161,9 @@ export interface EmergencyCase {
   };
   vitals: CaseVitals;
   bedBay: string; // e.g., "Resus Bay 1", "Trauma Bay 2", "Acute Bed 04"
+  assignedPhysicianId?: string;
   assignedPhysician: string;
+  assignedNurseId?: string;
   assignedNurse: string;
   status: CaseStatus;
   isMlc: boolean;
@@ -185,6 +204,7 @@ export interface MedicoLegalCase {
   smellOfAlcoholOrAgent: string;
   clothingSealedAndHandedOver: boolean;
   sealedArticlesDescription: string;
+  cmoStaffId?: string;
   cmoName: string;
   reviewStatus: 'Draft' | 'Pending CMO Review' | 'Signed & Sealed' | 'Archived';
   cmoSignedAt?: string;
@@ -308,7 +328,7 @@ export interface AuditLog {
   userName: string;
   userRole: UserRole;
   action: string;
-  targetType: 'PATIENT' | 'CASE' | 'MLC' | 'POISON' | 'TRANSFER' | 'STAFF' | 'SYSTEM';
+  targetType: 'PATIENT' | 'CASE' | 'MLC' | 'POISON' | 'TRANSFER' | 'STAFF' | 'PHARMACY' | 'SYSTEM';
   targetId: string;
   details: string;
   ipStation: string;
@@ -377,19 +397,108 @@ export interface Appointment {
   triageStatus?: PatientTriageStatus;
   requestedByPatient?: boolean;
   cancellationReason?: string;
+  declineReason?: string;
+  acceptedByDoctorId?: string;
+  acceptedByDoctorName?: string;
+  acceptedAt?: string;
+  declinedByDoctorId?: string;
+  declinedByDoctorName?: string;
+  declinedAt?: string;
+  originalDate?: string;
+  originalTimeSlot?: string;
+  proposedDate?: string;
+  proposedTimeSlot?: string;
+  rescheduleReason?: string;
+  rescheduleProposedBy?: string;
+  rescheduleProposedById?: string;
+  rescheduleProposedAt?: string;
+  rescheduleResponseStatus?: 'Pending' | 'Accepted' | 'Rejected';
+  reschedulePatientNote?: string;
+  rescheduleRespondedAt?: string;
   createdAt?: string;
+}
+
+export type PrescriptionStatus = 'Draft' | 'Active' | 'Discontinued';
+
+export type MedicationActivityStatus = 'Taken' | 'Skipped' | 'Not yet recorded';
+
+export interface PatientMedicationActivity {
+  id: string;
+  patientId: string;
+  patientName: string;
+  encounterId: string;
+  prescriptionItemId: string;
+  medicationKey?: string;
+  prescriptionId?: string;
+  medicineName: string;
+  strength?: string;
+  dosage?: string;
+  status: MedicationActivityStatus;
+  recordedAt: string;
+  note?: string;
+  reportedBy: 'patient';
+}
+
+export interface ConnectedPatientMedication {
+  id: string;
+  medicationKey?: string;
+  prescriptionItemId: string;
+  encounterId: string;
+  patientId: string;
+  medicineName: string;
+  drugName: string;
+  strength: string;
+  dosage: string;
+  frequency: string;
+  duration: string;
+  route: string;
+  timing?: string;
+  instructions: string;
+  prescribingDoctorId?: string;
+  prescribingDoctorName: string;
+  prescribedDate: string;
+  status: PrescriptionStatus;
+  discontinuedAt?: string;
+  discontinuedBy?: string;
+  discontinuedByDoctorName?: string;
+  discontinuedReason?: string;
+  diagnosis?: string;
+  isLegacyBaseline?: boolean;
 }
 
 export interface PrescriptionItem {
   id?: string;
+  patientId?: string;
+  encounterId?: string;
+  prescribingDoctorId?: string;
+  prescribingDoctorName?: string;
   drugName?: string;
   medicineName?: string;
-  dosage: string; // e.g. "500 mg"
+  genericName?: string;
+  dosageForm?: PharmacyDosageForm;
+  strength?: string; // e.g. "90 mg", "40 mg"
+  dosage: string; // e.g. "1 tablet" or "500 mg"
   frequency: string; // e.g. "1-0-1 (Twice daily)"
   duration: string; // e.g. "5 days"
-  route?: string;
-  timing?: 'Before Food' | 'After Food' | 'With Food' | 'At Bedtime' | 'As Needed';
+  prescribedQuantity?: number;
+  route?: string; // e.g. "Oral", "Inhalation", "Sublingual", "Topical", "IV"
+  timing?:
+    | 'Before Food'
+    | 'After Food'
+    | 'With Food'
+    | 'Empty Stomach'
+    | 'Bedtime'
+    | 'At Bedtime'
+    | 'SOS (As needed)'
+    | 'As Needed';
   instructions?: string;
+  createdDate?: string;
+  status?: PrescriptionStatus;
+  discontinuedAt?: string;
+  discontinuedBy?: string;
+  discontinuedByDoctorId?: string;
+  discontinuedByDoctorName?: string;
+  discontinuedReason?: string;
 }
 
 export interface ClinicalEncounter {
@@ -403,7 +512,14 @@ export interface ClinicalEncounter {
   department?: string;
   date: string;
   type?: string;
-  encounterType?: 'OPD Consultation' | 'Inpatient Round' | 'Specialist Assessment' | 'Tele-consult';
+  encounterType?:
+    | 'OPD Consultation'
+    | 'Inpatient Round'
+    | 'Specialist Assessment'
+    | 'Tele-consult'
+    | 'Follow-up Review'
+    | 'Post-Discharge Review'
+    | AppointmentType;
   chiefComplaint: string;
   subjectiveHistory?: string;
   historyOfPresentIllness?: string;
@@ -413,6 +529,11 @@ export interface ClinicalEncounter {
   assessmentDiagnosis?: string;
   diagnosis?: string;
   prescriptions: PrescriptionItem[];
+  prescriptionStatus?: PrescriptionStatus;
+  prescriptionCreatedDate?: string;
+  discontinuedAt?: string;
+  discontinuedBy?: string;
+  discontinuedReason?: string;
   orderedInvestigations?: string[];
   orderedLabs?: string[];
   followUpDate?: string;
@@ -434,6 +555,7 @@ export interface FollowUpReminder {
   urgency?: 'routine' | 'important' | 'urgent';
   status?: 'pending' | 'contacted' | 'completed';
   completed?: boolean;
+  attendingDoctorId?: string;
   attendingDoctor?: string;
 }
 
@@ -454,18 +576,24 @@ export interface DiagnosticLabReport {
   sampleDate?: string;
   collectedAt?: string;
   reportedDate?: string;
+  orderingDoctorId?: string;
   orderingDoctor?: string;
   parameters: LabParameter[];
   impression?: string;
   clinicalNotes?: string;
   criticalPanicValue?: boolean;
+  reviewedByStaffId?: string;
   reviewedBy?: string;
   status: 'Finalized' | 'Pending Review' | 'Critical Panic Alert' | 'Reviewed';
 }
 
 export interface DoctorDirectoryItem {
   id: string;
+  staffId?: string;
   name: string;
+  designation?: string;
+  station?: string;
+  employeeCode?: string;
   specialty: string;
   subSpecialty?: string;
   qualifications: string;
@@ -508,24 +636,74 @@ export interface PatientDocument {
   downloadUrl?: string;
 }
 
-export interface PatientMessage {
+export type ConversationStatus = 'Active' | 'Archived';
+
+export type MessageSenderRole = 'Patient' | 'Doctor';
+
+export type MessageCategory =
+  | 'General Query'
+  | 'Medication Review'
+  | 'Lab Follow-up'
+  | 'Appointment'
+  | 'Follow-up Coordination'
+  | 'Administrative Query';
+
+export interface MessageAttachment {
+  fileName: string;
+  fileType: 'PDF' | 'IMAGE' | 'DICOM';
+  fileSize: string;
+  documentId?: string;
+  category?: string;
+}
+
+export interface MessageConversation {
   id: string;
   patientId: string;
+  patientName: string;
+  patientPhotoUrl?: string;
+  doctorId: string;
+  doctorName: string;
+  doctorSpecialty?: string;
+  doctorDepartment?: string;
+  doctorPhotoUrl?: string;
+  relatedAppointmentId?: string;
+  createdAt: string;
+  lastMessageAt: string;
+  status: ConversationStatus;
+}
+
+export interface PatientMessage {
+  id: string;
+  conversationId: string;
+  patientId: string;
+  patientName?: string;
   doctorId: string;
   doctorName: string;
   doctorSpecialty?: string;
   doctorPhotoUrl?: string;
+  senderId: string;
+  senderRole: MessageSenderRole;
   sender: 'patient' | 'doctor' | 'system';
   text: string;
   timestamp: string;
   isRead: boolean;
-  category?: 'General Query' | 'Medication Review' | 'Lab Follow-up' | 'Appointment';
+  readAt?: string;
+  category?: MessageCategory;
+  relatedAppointmentId?: string;
+  attachment?: MessageAttachment;
 }
 
 export interface PatientNotification {
   id: string;
   patientId: string;
-  category: 'appointment' | 'report' | 'prescription' | 'reminder' | 'announcement';
+  doctorId?: string;
+  appointmentId?: string;
+  encounterId?: string;
+  conversationId?: string;
+  messageId?: string;
+  dedupKey?: string;
+  targetAudience?: 'patient' | 'doctor' | 'pharmacy' | 'both';
+  category: 'appointment' | 'report' | 'prescription' | 'pharmacy' | 'reminder' | 'announcement' | 'message';
   title: string;
   message: string;
   timestamp: string;
@@ -535,6 +713,7 @@ export interface PatientNotification {
 }
 
 export interface PrivacyConsentSettings {
+  patientId?: string;
   emergencyAccessGranted: boolean;
   shareWithSpecialists: boolean;
   familyAccessGranted: boolean;
@@ -542,10 +721,15 @@ export interface PrivacyConsentSettings {
   anonymizedResearchConsent: boolean;
   downloadRecordsPermitted: boolean;
   smsEmailAlerts: boolean;
+  updatedAt?: string;
 }
+
+export type PatientPrivacySettingsMap = Record<string, PrivacyConsentSettings>;
 
 export interface AccessAuditRecord {
   id: string;
+  patientId: string;
+  accessorStaffId?: string;
   accessorName: string;
   accessorRole: string;
   department: string;
@@ -553,4 +737,154 @@ export interface AccessAuditRecord {
   purpose: string;
   action: string;
 }
+
+// ==========================================
+// PHASE 5: HOSPITAL PHARMACY MANAGEMENT TYPES
+// ==========================================
+
+export type PharmacyDosageForm =
+  | 'Tablet'
+  | 'Capsule'
+  | 'Inhaler'
+  | 'Injection'
+  | 'Syrup'
+  | 'Ointment'
+  | 'Drops'
+  | 'Powder'
+  | 'Solution';
+
+export type PharmacyMedicineStatus = 'Active' | 'Inactive';
+
+export interface PharmacyMedicine {
+  id: string;
+  genericName: string;
+  brandName?: string;
+  strength: string;
+  dosageForm: PharmacyDosageForm;
+  manufacturer: string;
+  category: string;
+  storageRequirements?: string;
+  unitOfMeasurement: string;
+  minimumStockThreshold: number;
+  status: PharmacyMedicineStatus;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface PharmacyBatch {
+  id: string;
+  medicineId: string;
+  batchNumber: string;
+  availableQuantity: number;
+  expiryDate: string; // YYYY-MM-DD
+  purchaseDate: string; // YYYY-MM-DD
+  supplierReference: string;
+  supplierName: string;
+  stockLocation: string;
+  unitOfMeasurement: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export type PharmacyTransactionType =
+  | 'Stock Receipt'
+  | 'Batch Addition'
+  | 'Stock Adjustment'
+  | 'Dispense'
+  | 'Partial Dispense'
+  | 'Expiry Write-Off'
+  | 'Catalogue Update';
+
+export interface PharmacyTransaction {
+  id: string;
+  medicineId: string;
+  medicineName: string;
+  batchId?: string;
+  batchNumber?: string;
+  transactionType: PharmacyTransactionType;
+  quantityDelta: number;
+  previousQuantity: number;
+  newQuantity: number;
+  timestamp: string;
+  staffId: string;
+  staffName: string;
+  staffRole: UserRole;
+  reason: string;
+  relatedPrescriptionId?: string;
+  relatedPrescriptionItemId?: string;
+  relatedDispensingRecordId?: string;
+  patientId?: string;
+  patientName?: string;
+}
+
+export type PharmacyDispensingStatus =
+  | 'Fully Dispensed'
+  | 'Partially Dispensed'
+  | 'Unavailable'
+  | 'Not Yet Dispensed';
+
+export type PharmacyDispensingItemStatus =
+  | 'Dispensed'
+  | 'Partially Dispensed'
+  | 'Unavailable'
+  | 'Not Yet Dispensed';
+
+export interface PharmacyDispensingItem {
+  prescriptionItemId: string;
+  medicineId?: string;
+  requestedMedicineName: string;
+  requestedGenericName: string;
+  requestedStrength: string;
+  requestedDosageForm: PharmacyDosageForm;
+  prescribedQuantity: number;
+  dispensedQuantity: number;
+  previouslyDispensedQuantity: number;
+  remainingQuantity: number;
+  batchId?: string;
+  batchNumber?: string;
+  status: PharmacyDispensingItemStatus;
+  note?: string;
+}
+
+export interface PharmacyDispensingRecord {
+  id: string;
+  encounterId: string;
+  patientId: string;
+  patientName: string;
+  prescribingDoctorId?: string;
+  prescribingDoctorName: string;
+  prescriptionDate: string;
+  dispensedAt: string;
+  dispensedByStaffId: string;
+  dispensedByStaffName: string;
+  status: PharmacyDispensingStatus;
+  items: PharmacyDispensingItem[];
+  notes?: string;
+}
+
+export type PharmacyReorderStatus =
+  | 'Draft'
+  | 'Submitted Purchase Request'
+  | 'Approved'
+  | 'Cancelled';
+
+export interface PharmacyReorderRequest {
+  id: string;
+  medicineId: string;
+  genericName: string;
+  brandName?: string;
+  strength: string;
+  dosageForm: PharmacyDosageForm;
+  requestedQuantity: number;
+  currentUsableStock: number;
+  minimumThreshold: number;
+  supplierName: string;
+  supplierReference?: string;
+  reason: 'Low Stock' | 'Out of Stock' | 'Near Expiry Replacement';
+  status: PharmacyReorderStatus;
+  createdAt: string;
+  createdBy: string;
+  notes?: string;
+}
+
 

@@ -17,10 +17,12 @@ import {
   Bell,
   CheckCircle2,
   Sparkles,
-  HeartPulse
+  HeartPulse,
+  ShieldCheck
 } from 'lucide-react';
 import { UserRole } from '../../types';
 import { Avatar } from '../common/Avatar';
+import { useAuth } from '../../context/AuthContext';
 
 export const Navbar: React.FC = () => {
   const { 
@@ -36,6 +38,7 @@ export const Navbar: React.FC = () => {
     setIsNewAppointmentOpen,
     setSelectedCaseId
   } = useApp();
+  const { authMode, setIsAuthModalOpen } = useAuth();
 
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
   const [currentTime, setCurrentTime] = useState(new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }));
@@ -63,6 +66,8 @@ export const Navbar: React.FC = () => {
         return 'bg-emerald-50 text-emerald-800 border-emerald-200';
       case 'records':
         return 'bg-amber-50 text-amber-800 border-amber-200';
+      case 'pharmacist':
+        return 'bg-indigo-50 text-indigo-800 border-indigo-200';
       case 'admin':
         return 'bg-slate-100 text-slate-800 border-slate-300';
       default:
@@ -193,10 +198,24 @@ export const Navbar: React.FC = () => {
             <span>Register Patient</span>
           </button>
 
+          {/* Supabase Auth & Session Authority Trigger */}
+          <button
+            onClick={() => setIsAuthModalOpen(true)}
+            className={`hidden lg:inline-flex items-center gap-1.5 px-2.5 py-2 rounded-xl text-xs font-semibold border transition-colors cursor-pointer ${
+              authMode === 'authenticated_supabase'
+                ? 'bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border-emerald-200'
+                : 'bg-white hover:bg-slate-50 text-slate-700 border-slate-200/80'
+            }`}
+            title="Manage Supabase PostgreSQL Authentication & Session Authority"
+          >
+            <ShieldCheck className={`w-3.5 h-3.5 ${authMode === 'authenticated_supabase' ? 'text-emerald-600' : 'text-teal-600'}`} />
+            <span>{authMode === 'authenticated_supabase' ? 'Verified DB Session' : 'Supabase Auth'}</span>
+          </button>
+
           {/* Firebase Architecture Modal Trigger */}
           <button
             onClick={() => setIsFirebaseArchitectureOpen(true)}
-            className="hidden lg:inline-flex items-center gap-1.5 px-2.5 py-2 rounded-xl bg-white hover:bg-slate-50 text-slate-700 text-xs font-medium border border-slate-200/80 transition-colors cursor-pointer"
+            className="hidden xl:inline-flex items-center gap-1.5 px-2.5 py-2 rounded-xl bg-white hover:bg-slate-50 text-slate-700 text-xs font-medium border border-slate-200/80 transition-colors cursor-pointer"
             title="View Cloud Firestore & Authentication Architecture"
           >
             <Database className="w-3.5 h-3.5 text-amber-600" />
@@ -277,7 +296,7 @@ export const Navbar: React.FC = () => {
                     <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1.5 px-1">
                       Switch Duty Profile (Simulate Other Staff)
                     </p>
-                    <div className="space-y-1">
+                    <div className="space-y-1 max-h-72 overflow-y-auto pr-1">
                       {allStaff.map((staff) => (
                         <button
                           key={staff.id}
@@ -296,7 +315,7 @@ export const Navbar: React.FC = () => {
                               src={staff.photoUrl}
                               name={staff.name}
                               size="xs"
-                              gender={staff.name.includes('Ananya') || staff.name.includes('Rekha') || staff.name.includes('Radhika') ? 'Female' : 'Male'}
+                              gender={staff.gender || (staff.name.includes('Ananya') || staff.name.includes('Rekha') || staff.name.includes('Radhika') || staff.name.includes('Priya') || staff.name.includes('Sneha') ? 'Female' : 'Male')}
                             />
                             <div className="min-w-0">
                               <div className="flex items-center gap-1.5">
@@ -305,7 +324,7 @@ export const Navbar: React.FC = () => {
                                   {staff.role}
                                 </span>
                               </div>
-                              <p className="text-[10px] text-slate-400 truncate">{staff.designation}</p>
+                              <p className="text-[10px] text-slate-400 truncate">{staff.specialty || staff.designation}</p>
                             </div>
                           </div>
                           {currentUser.id === staff.id && (

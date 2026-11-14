@@ -31,7 +31,13 @@ export const PatientNavbar: React.FC = () => {
 
   const [isPatientMenuOpen, setIsPatientMenuOpen] = useState(false);
 
-  const unreadNotifs = patientNotifications.filter((n) => n.patientId === activePatient.id && !n.isRead).length;
+  const unreadNotifs = patientNotifications.filter(
+    (n) =>
+      n.patientId === activePatient.id &&
+      !n.isRead &&
+      n.targetAudience !== 'doctor' &&
+      n.targetAudience !== 'pharmacy'
+  ).length;
 
   // Filter sample named patients for simulation
   const samplePatients = patients.filter((p) => !p.isUnidentified);

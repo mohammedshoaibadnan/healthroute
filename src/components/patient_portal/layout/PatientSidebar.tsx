@@ -42,8 +42,16 @@ export const PatientSidebar: React.FC = () => {
   } = useApp();
 
   const upcomingApts = filterPatientAppointments(appointments, activePatient.id, 'upcoming').length;
-  const unreadNotifs = patientNotifications.filter((n) => n.patientId === activePatient.id && !n.isRead).length;
-  const unreadMsgs = patientMessages.filter((m) => m.patientId === activePatient.id && !m.isRead && m.sender === 'doctor').length;
+  const unreadNotifs = patientNotifications.filter(
+    (n) =>
+      n.patientId === activePatient.id &&
+      !n.isRead &&
+      n.targetAudience !== 'doctor' &&
+      n.targetAudience !== 'pharmacy'
+  ).length;
+  const unreadMsgs = patientMessages.filter(
+    (m) => m.patientId === activePatient.id && !m.isRead && (m.senderRole === 'Doctor' || m.sender === 'doctor')
+  ).length;
   const reportsCount = patientDocuments.filter((d) => d.patientId === activePatient.id).length;
 
   const primaryItems: NavItem[] = [

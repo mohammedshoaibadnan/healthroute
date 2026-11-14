@@ -33,7 +33,13 @@ export const PatientMobileNav: React.FC = () => {
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
 
   const upcomingApts = filterPatientAppointments(appointments, activePatient.id, 'upcoming').length;
-  const unreadNotifs = patientNotifications.filter((n) => n.patientId === activePatient.id && !n.isRead).length;
+  const unreadNotifs = patientNotifications.filter(
+    (n) =>
+      n.patientId === activePatient.id &&
+      !n.isRead &&
+      n.targetAudience !== 'doctor' &&
+      n.targetAudience !== 'pharmacy'
+  ).length;
 
   const quickTabs: Array<{ id: PatientPortalTab; label: string; icon: React.ComponentType<{ className?: string }>; badge?: number }> = [
     { id: 'patient-home', label: 'Home', icon: LayoutDashboard },

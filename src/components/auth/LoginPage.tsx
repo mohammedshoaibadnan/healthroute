@@ -1,17 +1,16 @@
 import React, { useState } from 'react';
 import { useApp } from '../../context/AppContext';
+import { useAuth } from '../../context/AuthContext';
 import { HOSPITAL_INFO } from '../../data/mockData';
 import {
   Activity,
   Lock,
   Mail,
   ShieldCheck,
-  Stethoscope,
-  Scale,
-  UserCheck,
-  Check,
   ArrowRight,
   Database,
+  AlertCircle,
+  Loader2,
 } from 'lucide-react';
 import { UserRole } from '../../types';
 
@@ -21,18 +20,34 @@ interface LoginPageProps {
 
 export const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess }) => {
   const { allStaff, switchUser, setIsFirebaseArchitectureOpen } = useApp();
+  const {
+    configStatus,
+    isActionLoading,
+    authError,
+    signInWithPassword,
+    enterDemoSimulationMode,
+  } = useAuth();
 
-  const [email, setEmail] = useState('v.malhotra@apexcity.hospital');
-  const [password, setPassword] = useState('••••••••••••');
+  const [email, setEmail] = useState('v.malhotra@apexhospital.demo.org');
+  const [password, setPassword] = useState('');
   const [selectedStaffId, setSelectedStaffId] = useState('staff-doc-1');
 
-  const handleManualLogin = (e: React.FormEvent) => {
+  const handleManualLogin = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (configStatus.isConfigured && password.trim().length > 0) {
+      const res = await signInWithPassword(email, password);
+      if (res.success) {
+        onLoginSuccess();
+      }
+      return;
+    }
+    await enterDemoSimulationMode();
     switchUser(selectedStaffId);
     onLoginSuccess();
   };
 
-  const handleQuickRoleSelect = (staffId: string) => {
+  const handleQuickRoleSelect = async (staffId: string) => {
+    await enterDemoSimulationMode();
     switchUser(staffId);
     onLoginSuccess();
   };
@@ -69,6 +84,14 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess }) => {
       color: 'border-amber-200 bg-amber-50/50 hover:border-amber-400',
       badge: 'bg-amber-100 text-amber-800',
       description: 'Unidentified intake, temporary ID generation, permanent MRN reconciliation',
+    },
+    {
+      role: 'pharmacist' as UserRole,
+      title: 'Chief Hospital Pharmacist',
+      staff: allStaff.find((s) => s.role === 'pharmacist')!,
+      color: 'border-indigo-200 bg-indigo-50/50 hover:border-indigo-400',
+      badge: 'bg-indigo-100 text-indigo-800',
+      description: 'Central formulary, batch & expiry control, verified prescription dispensing',
     },
     {
       role: 'admin' as UserRole,
@@ -156,12 +179,23 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess }) => {
           </div>
         </div>
 
-        {/* Standard Credentials Form Simulation */}
+        {/* Standard Credentials Form / Supabase SSO */}
         <div className="bg-white rounded-2xl border border-slate-200 p-5 sm:p-6 shadow-xs max-w-md mx-auto space-y-4">
           <div className="text-center">
             <h3 className="font-bold text-sm text-slate-900">Hospital Staff Single Sign-On</h3>
-            <p className="text-xs text-slate-500 mt-0.5">Enter hospital Active Directory credentials</p>
+            <p className="text-xs text-slate-500 mt-0.5">
+              {configStatus.isConfigured
+                ? 'Connected to Supabase PostgreSQL Auth'
+                : 'Demo Sandbox Mode (Set VITE_SUPABASE_URL to enable live Auth)'}
+            </p>
           </div>
+
+          {authError && (
+            <div className="p-3 rounded-xl bg-rose-50 border border-rose-200 text-rose-800 text-xs flex items-start gap-2">
+              <AlertCircle className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
+              <span>{authError}</span>
+            </div>
+          )}
 
           <form onSubmit={handleManualLogin} className="space-y-3 text-xs">
             <div>
@@ -204,6 +238,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess }) => {
                   type="password"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
+                  placeholder="Enter Supabase password (or leave blank for Demo)"
                   className="w-full pl-9 pr-3 py-2 rounded-lg border border-slate-200 text-xs"
                 />
               </div>
@@ -211,9 +246,14 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess }) => {
 
             <button
               type="submit"
-              className="w-full py-2.5 rounded-lg bg-[#0b192e] hover:bg-slate-800 text-white font-bold text-xs flex items-center justify-center gap-2 shadow-xs transition-colors"
+              disabled={isActionLoading}
+              className="w-full py-2.5 rounded-lg bg-[#0b192e] hover:bg-slate-800 disabled:opacity-50 text-white font-bold text-xs flex items-center justify-center gap-2 shadow-xs transition-colors cursor-pointer"
             >
-              <ShieldCheck className="w-4 h-4 text-teal-400" />
+              {isActionLoading ? (
+                <Loader2 className="w-4 h-4 animate-spin text-teal-400" />
+              ) : (
+                <ShieldCheck className="w-4 h-4 text-teal-400" />
+              )}
               <span>Authenticate & Enter Emergency Workspace</span>
             </button>
           </form>

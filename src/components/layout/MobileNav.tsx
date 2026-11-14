@@ -6,10 +6,11 @@ import {
   CalendarClock,
   Stethoscope,
   ClipboardList,
+  MessageSquare,
   AlertCircle,
   Truck,
   FileText,
-  ShieldCheck,
+  Pill,
 } from 'lucide-react';
 
 export const MobileNav: React.FC = () => {
@@ -25,10 +26,10 @@ export const MobileNav: React.FC = () => {
     { id: 'patients', label: 'Patients', icon: Users },
     { id: 'appointments', label: 'Appts', icon: CalendarClock, badge: waitingAppointments },
     { id: 'clinical', label: 'Clinical', icon: Stethoscope },
+    { id: 'pharmacy', label: 'Pharmacy', icon: Pill },
+    { id: 'messages', label: 'Messages', icon: MessageSquare },
     { id: 'records', label: 'Records', icon: ClipboardList },
     { id: 'emergency', label: 'ER Care', icon: AlertCircle, badge: activeEmergencyCases },
-    { id: 'transfers', label: 'Transfers', icon: Truck },
-    { id: 'documents', label: 'Docs', icon: FileText },
   ];
 
   return (

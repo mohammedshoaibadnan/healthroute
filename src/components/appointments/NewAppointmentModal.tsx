@@ -9,7 +9,8 @@ export const NewAppointmentModal: React.FC = () => {
     setIsNewAppointmentOpen, 
     bookAppointment, 
     patients, 
-    currentUser 
+    currentUser,
+    doctorsDirectory
   } = useApp();
 
   const [mode, setMode] = useState<'existing' | 'new'>('existing');
@@ -22,14 +23,30 @@ export const NewAppointmentModal: React.FC = () => {
   const [patientPhone, setPatientPhone] = useState('+91 98800 00000');
 
   // Appointment details
+  const defaultDoc =
+    doctorsDirectory.find((d) => d.id === currentUser.id) || doctorsDirectory[0];
+  const [selectedDoctorId, setSelectedDoctorId] = useState<string>(defaultDoc.id);
   const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
   const [timeSlot, setTimeSlot] = useState('11:45 AM');
   const [type, setType] = useState<AppointmentType>('New Consultation');
   const [chiefComplaint, setChiefComplaint] = useState('Routine clinical checkup & review');
   const [notes, setNotes] = useState('Patient scheduled for OPD clinic evaluation.');
-  const [roomNumber, setRoomNumber] = useState('Room 204');
+  const [roomNumber, setRoomNumber] = useState(
+    defaultDoc.station?.split('&')[0]?.trim() || 'OPD Room 204'
+  );
 
   if (!isNewAppointmentOpen) return null;
+
+  const selectedDoctor =
+    doctorsDirectory.find((d) => d.id === selectedDoctorId) || defaultDoc;
+
+  const handleDoctorChange = (docId: string) => {
+    setSelectedDoctorId(docId);
+    const doc = doctorsDirectory.find((d) => d.id === docId);
+    if (doc?.station) {
+      setRoomNumber(doc.station.split('&')[0].trim());
+    }
+  };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -48,8 +65,12 @@ export const NewAppointmentModal: React.FC = () => {
           type,
           chiefComplaint,
           notes,
-          doctorName: currentUser.name,
+          doctorId: selectedDoctor.id,
+          doctorName: selectedDoctor.name,
+          doctorPhotoUrl: selectedDoctor.photoUrl,
+          department: selectedDoctor.department,
           roomNumber,
+          roomNo: roomNumber,
         });
       }
     } else {
@@ -64,8 +85,12 @@ export const NewAppointmentModal: React.FC = () => {
         type,
         chiefComplaint,
         notes,
-        doctorName: currentUser.name,
+        doctorId: selectedDoctor.id,
+        doctorName: selectedDoctor.name,
+        doctorPhotoUrl: selectedDoctor.photoUrl,
+        department: selectedDoctor.department,
         roomNumber,
+        roomNo: roomNumber,
       });
     }
 
@@ -226,25 +251,30 @@ export const NewAppointmentModal: React.FC = () => {
                 className="w-full px-3 py-2 rounded-lg border border-slate-200 bg-white text-slate-800 focus:outline-hidden focus:border-teal-500"
               >
                 <option value="New Consultation">New Consultation</option>
-                <option value="Follow-up">Follow-up</option>
-                <option value="Routine Review">Routine Review</option>
-                <option value="Pre-Operative Clearance">Pre-Op Clearance</option>
-                <option value="Post-Discharge Review">Post-Discharge</option>
-                <option value="Teleconsultation">Teleconsultation</option>
+                <option value="Follow-up Review">Follow-up Review</option>
+                <option value="Chronic Care Review">Chronic Care Review</option>
+                <option value="Post-Operative Check">Post-Operative Check</option>
+                <option value="Preventive Health Assessment">Preventive Health Assessment</option>
+                <option value="Specialist Referral">Specialist Referral</option>
               </select>
             </div>
           </div>
 
           {/* Doctor & Room */}
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
               <label className="block text-slate-700 font-medium mb-1">Attending Physician</label>
-              <input
-                type="text"
-                disabled
-                value={currentUser.name}
-                className="w-full px-3 py-2 rounded-lg border border-slate-200 bg-slate-100 text-slate-600 font-medium"
-              />
+              <select
+                value={selectedDoctorId}
+                onChange={(e) => handleDoctorChange(e.target.value)}
+                className="w-full px-3 py-2 rounded-lg border border-slate-200 bg-white text-slate-800 focus:outline-hidden focus:border-teal-500 font-medium"
+              >
+                {doctorsDirectory.map((doc) => (
+                  <option key={doc.id} value={doc.id}>
+                    {doc.name} ({doc.specialty.split('&')[0].trim()})
+                  </option>
+                ))}
+              </select>
             </div>
             <div>
               <label className="block text-slate-700 font-medium mb-1">Consultation Chamber</label>

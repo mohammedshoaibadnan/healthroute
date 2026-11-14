@@ -23,10 +23,13 @@ import {
 } from 'lucide-react';
 import { Patient } from '../../types';
 import { Avatar } from '../common/Avatar';
+import { derivePatientMedicationRegimen } from '../../utils/rules';
 
 export const PatientManagerView: React.FC = () => {
   const { 
     patients, 
+    encounters,
+    medicationActivities,
     reconcilePatient, 
     updatePatientPhoto,
     setIsNewRegistrationOpen,
@@ -619,6 +622,77 @@ export const PatientManagerView: React.FC = () => {
                   {selectedProfilePatient.allergies?.length || 0} Listed
                 </span>
               </div>
+
+              {/* Connected Active Medications & Patient-Reported Medication Activity */}
+              {(() => {
+                const profileRegimen = derivePatientMedicationRegimen(selectedProfilePatient, encounters);
+                const profileActivities = medicationActivities.filter(
+                  (a) => a.patientId === selectedProfilePatient.id
+                );
+                return (
+                  <div className="p-3.5 rounded-xl bg-teal-50/40 border border-teal-200/80 space-y-2.5">
+                    <div className="flex items-center justify-between">
+                      <span className="font-bold text-slate-900 text-xs">
+                        Active Prescribed Medications ({profileRegimen.activeMedications.length})
+                      </span>
+                      <span className="text-[10px] font-bold text-teal-800 bg-teal-100 px-2 py-0.5 rounded-full">
+                        Connected Prescription List
+                      </span>
+                    </div>
+                    {profileRegimen.activeMedications.length > 0 ? (
+                      <div className="space-y-1.5">
+                        {profileRegimen.activeMedications.map((m) => (
+                          <div
+                            key={m.id}
+                            className="p-2 rounded-lg bg-white border border-slate-200 flex items-center justify-between gap-2 text-[11px]"
+                          >
+                            <div>
+                              <strong className="text-slate-900">{m.drugName}</strong>
+                              <span className="text-slate-500">
+                                {' '}
+                                • {m.dosage} • {m.frequency} ({m.route || 'Oral'})
+                              </span>
+                            </div>
+                            <span className="text-[10px] text-slate-500 shrink-0">
+                              {m.prescribingDoctorName} ({m.prescribedDate})
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="text-[11px] text-slate-500 italic">
+                        No active prescriptions on file.
+                      </p>
+                    )}
+
+                    {profileActivities.length > 0 && (
+                      <div className="pt-2 border-t border-teal-200/60 space-y-1.5">
+                        <div className="flex items-center justify-between">
+                          <span className="font-bold text-slate-800 text-[11px]">
+                            Recent Patient-Reported Medication Activity
+                          </span>
+                          <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-amber-100 text-amber-900 border border-amber-300">
+                            Patient-Reported
+                          </span>
+                        </div>
+                        {profileActivities.slice(0, 3).map((act) => (
+                          <div
+                            key={act.id}
+                            className="text-[11px] text-slate-700 flex items-center justify-between bg-white px-2.5 py-1.5 rounded-lg border border-slate-200"
+                          >
+                            <span>
+                              <strong>{act.medicineName}</strong>: {act.status} (Patient-Reported)
+                            </span>
+                            <span className="text-[10px] text-slate-400">
+                              {new Date(act.recordedAt).toLocaleString()}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                );
+              })()}
             </div>
 
             {/* Modal Footer */}

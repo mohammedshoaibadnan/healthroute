@@ -29,10 +29,14 @@ import {
   ChevronDown,
   Check,
   ShieldAlert,
+  XCircle,
+  RefreshCw,
+  Lock,
 } from 'lucide-react';
 import { Appointment, AppointmentStatus, PatientTriageStatus } from '../../types';
-import { resolvePatientTriageStatus, getTriageBadgeConfig } from '../../utils/rules';
+import { resolvePatientTriageStatus, getTriageBadgeConfig, getAppointmentStatusBadge, canManageAppointmentRequest } from '../../utils/rules';
 import { Avatar } from '../common/Avatar';
+import { DoctorDeclineRequestModal, DoctorProposeRescheduleModal } from '../appointments/DoctorRequestActionModals';
 
 export const DoctorDashboard: React.FC = () => {
   const {
@@ -40,6 +44,7 @@ export const DoctorDashboard: React.FC = () => {
     appointments,
     updateAppointmentStatus,
     updateAppointmentTriageStatus,
+    acceptPatientAppointmentRequest,
     switchRole,
     startConsultation,
     encounters,
@@ -56,20 +61,31 @@ export const DoctorDashboard: React.FC = () => {
 
   const isNurse = currentUser.role === 'nurse';
 
+  const [scheduleScope, setScheduleScope] = useState<'today' | 'upcoming'>('today');
   const [appointmentFilter, setAppointmentFilter] = useState<'all' | 'waiting' | 'in-progress' | 'completed'>('all');
   const [nurseViewMode, setNurseViewMode] = useState<'cards' | 'table'>('cards');
   const [triageFilter, setTriageFilter] = useState<'all' | PatientTriageStatus>('all');
   const [activeTriageMenuAptId, setActiveTriageMenuAptId] = useState<string | null>(null);
   const [selectedDayIndex, setSelectedDayIndex] = useState<number>(3); // Default to Thursday (today)
+  const [declineTarget, setDeclineTarget] = useState<Appointment | null>(null);
+  const [rescheduleTarget, setRescheduleTarget] = useState<Appointment | null>(null);
 
-  // Filter today's appointments
+  // Filter today's, upcoming, and patient-requested appointments
   const todayDate = new Date().toISOString().split('T')[0];
-  const todayAppointments = appointments.filter((a) => a.date === todayDate);
+  const todayAppointments = appointments.filter((a) => a.date === todayDate && a.status !== 'Requested');
+  const upcomingAppointments = appointments.filter(
+    (a) => a.date > todayDate && !['Cancelled', 'Completed', 'No Show', 'Requested'].includes(a.status)
+  );
+  const requestedAppointments = appointments.filter((a) => a.status === 'Requested');
 
-  const filteredAppointments = todayAppointments.filter((a) => {
-    if (appointmentFilter === 'waiting' && a.status !== 'Waiting') return false;
-    if (appointmentFilter === 'in-progress' && a.status !== 'In Consultation') return false;
-    if (appointmentFilter === 'completed' && a.status !== 'Completed') return false;
+  const activeScopeList = scheduleScope === 'today' ? todayAppointments : upcomingAppointments;
+
+  const filteredAppointments = activeScopeList.filter((a) => {
+    if (scheduleScope === 'today') {
+      if (appointmentFilter === 'waiting' && a.status !== 'Waiting') return false;
+      if (appointmentFilter === 'in-progress' && a.status !== 'In Consultation') return false;
+      if (appointmentFilter === 'completed' && a.status !== 'Completed') return false;
+    }
 
     // Nurse triage acuity filter (only active when isNurse)
     if (isNurse && triageFilter !== 'all') {
@@ -86,7 +102,7 @@ export const DoctorDashboard: React.FC = () => {
   const completedCount = todayAppointments.filter((a) => a.status === 'Completed').length;
   const pendingNotes = encounters.filter((e) => e.status === 'Draft');
   const pendingLabs = labReports.filter((r) => r.status === 'Pending Review');
-  const criticalLabs = labReports.filter((r) => r.criticalPanicValue);
+  const criticalLabs = labReports.filter((r) => r.criticalPanicValue && r.status !== 'Reviewed');
 
   // Nurse Triage Acuity Counts
   const criticalTriageCount = todayAppointments.filter((a) => resolvePatientTriageStatus(a, cases) === 'Critical').length;
@@ -99,21 +115,7 @@ export const DoctorDashboard: React.FC = () => {
     (c) => (c.triageLevel === 'RED' || c.esiScore <= 2) && !['Discharged', 'Transferred', 'Brought Dead / Expired'].includes(c.status)
   );
 
-  const getStatusBadge = (status: AppointmentStatus) => {
-    switch (status) {
-      case 'Waiting':
-        return 'bg-amber-50 text-amber-800 border-amber-200';
-      case 'In Consultation':
-        return 'bg-teal-50 text-teal-800 border-teal-200 animate-pulse';
-      case 'Completed':
-        return 'bg-emerald-50 text-emerald-800 border-emerald-200';
-      case 'Scheduled':
-        return 'bg-blue-50 text-blue-800 border-blue-200';
-      case 'No Show':
-      case 'Cancelled':
-        return 'bg-slate-100 text-slate-600 border-slate-200';
-    }
-  };
+  const getStatusBadge = (status: AppointmentStatus) => getAppointmentStatusBadge(status);
 
   const PatientTriageBadge: React.FC<{
     status: PatientTriageStatus;
@@ -253,11 +255,11 @@ export const DoctorDashboard: React.FC = () => {
                     ? 'bg-emerald-50 text-emerald-800 border-emerald-200' 
                     : 'bg-teal-50 text-teal-800 border-teal-200'
                 }`}>
-                  {isNurse ? 'Clinical Nurse Triage Station' : 'OPD Room 204 Active'}
+                  {isNurse ? 'Clinical Nurse Triage Station' : currentUser.station || 'OPD Room 204 Active'}
                 </span>
                 <span className="text-[11px] font-bold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 flex items-center gap-1">
                   <CheckCircle2 className="w-3 h-3 text-emerald-600" />
-                  <span>On Duty</span>
+                  <span>{currentUser.availability || 'On Duty'}</span>
                 </span>
                 {isNurse && (
                   <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-rose-50 text-rose-700 border border-rose-200 flex items-center gap-1">
@@ -268,10 +270,11 @@ export const DoctorDashboard: React.FC = () => {
               </div>
               <p className="text-xs sm:text-sm text-slate-600 mt-1">
                 {currentUser.designation} • {currentUser.department}
+                {currentUser.qualifications ? ` • ${currentUser.qualifications}` : ''}
               </p>
               <div className="flex items-center gap-3 text-xs text-slate-500 mt-2.5 flex-wrap">
                 <span className="inline-flex items-center gap-1 font-mono text-[11px] px-2 py-0.5 rounded-md bg-slate-100 text-slate-700 border border-slate-200/80">
-                  Reg ID: <strong>{isNurse ? 'NUR-ER-312 / TNS-5012' : 'KMC-58291 / MCI-4412'}</strong>
+                  ID: <strong>{currentUser.employeeCode}</strong>
                 </span>
                 <span className="text-slate-300" aria-hidden="true">•</span>
                 <span className="flex items-center gap-1.5 font-medium">
@@ -279,9 +282,11 @@ export const DoctorDashboard: React.FC = () => {
                   <span>{new Date().toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' })}</span>
                 </span>
                 <span className="text-slate-300" aria-hidden="true">•</span>
-                <span className="text-teal-700 font-semibold">{isNurse ? 'Triage & Rapid Intake Shift' : 'Morning Clinic Session (09:00 - 14:00)'}</span>
+                <span className="text-teal-700 font-semibold">
+                  {isNurse ? 'Triage & Rapid Intake Shift' : currentUser.specialty || 'Morning Clinic Session (09:00 - 14:00)'}
+                </span>
                 <span className="text-slate-300" aria-hidden="true">•</span>
-                <span className="text-slate-700 font-medium">{todayAppointments.length} Booked Patients Today</span>
+                <span className="text-slate-700 font-medium">{todayAppointments.length} Booked Today • {upcomingAppointments.length} Upcoming</span>
               </div>
             </div>
           </div>
@@ -713,12 +718,14 @@ export const DoctorDashboard: React.FC = () => {
 
         {/* Master Appointment Schedule Container */}
         <div className="bg-white rounded-2xl border border-slate-200/90 overflow-hidden shadow-[0_4px_20px_-4px_rgba(15,23,42,0.04)]">
-          <div className="p-5 border-b border-slate-200/80 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div className="p-5 border-b border-slate-200/80 flex flex-col lg:flex-row lg:items-center justify-between gap-4">
             <div>
-              <div className="flex items-center gap-2.5">
-                <h2 className="font-bold text-base sm:text-lg text-slate-900 tracking-tight">Today's Appointment Schedule</h2>
+              <div className="flex items-center gap-2.5 flex-wrap">
+                <h2 className="font-bold text-base sm:text-lg text-slate-900 tracking-tight">
+                  {scheduleScope === 'today' ? "Today's Consultations" : 'Upcoming Scheduled Appointments'}
+                </h2>
                 <span className="text-xs font-bold px-2.5 py-0.5 rounded-full bg-slate-100 text-slate-700 border border-slate-200">
-                  {todayAppointments.length} Booked
+                  {activeScopeList.length} Booked
                 </span>
                 {isNurse && (
                   <span className="text-xs font-bold px-2.5 py-0.5 rounded-full bg-emerald-50 text-emerald-800 border border-emerald-200">
@@ -729,44 +736,72 @@ export const DoctorDashboard: React.FC = () => {
               <p className="text-xs text-slate-500 mt-0.5">
                 {isNurse 
                   ? 'Triage evaluation, lobby monitoring and patient acuity status queue' 
-                  : 'Outpatient consultation queue for Dr. Vikram Malhotra (Room 204)'}
+                  : `Outpatient consultation queue for ${currentUser.name} (${currentUser.station?.split('&')[0]?.trim() || 'Room 204'})`}
               </p>
             </div>
 
-            {/* Filter Pills */}
-            <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-xl text-xs font-medium self-start sm:self-center">
-              <button
-                onClick={() => setAppointmentFilter('all')}
-                className={`px-3 py-1.5 rounded-lg transition-all cursor-pointer ${
-                  appointmentFilter === 'all' ? 'bg-white text-slate-900 font-bold shadow-xs' : 'text-slate-600 hover:text-slate-900'
-                }`}
-              >
-                All ({todayAppointments.length})
-              </button>
-              <button
-                onClick={() => setAppointmentFilter('waiting')}
-                className={`px-3 py-1.5 rounded-lg transition-all cursor-pointer ${
-                  appointmentFilter === 'waiting' ? 'bg-white text-slate-900 font-bold shadow-xs' : 'text-slate-600 hover:text-slate-900'
-                }`}
-              >
-                Waiting ({waitingCount})
-              </button>
-              <button
-                onClick={() => setAppointmentFilter('in-progress')}
-                className={`px-3 py-1.5 rounded-lg transition-all cursor-pointer ${
-                  appointmentFilter === 'in-progress' ? 'bg-white text-slate-900 font-bold shadow-xs' : 'text-slate-600 hover:text-slate-900'
-                }`}
-              >
-                In Consultation ({inConsultCount})
-              </button>
-              <button
-                onClick={() => setAppointmentFilter('completed')}
-                className={`px-3 py-1.5 rounded-lg transition-all cursor-pointer ${
-                  appointmentFilter === 'completed' ? 'bg-white text-slate-900 font-bold shadow-xs' : 'text-slate-600 hover:text-slate-900'
-                }`}
-              >
-                Completed ({completedCount})
-              </button>
+            <div className="flex flex-wrap items-center gap-2 self-start lg:self-center">
+              {/* Schedule Scope Toggle: Today's Consultations vs Upcoming Appointments */}
+              <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-xl text-xs font-semibold border border-slate-200/60">
+                <button
+                  onClick={() => setScheduleScope('today')}
+                  className={`px-3 py-1.5 rounded-lg transition-all cursor-pointer ${
+                    scheduleScope === 'today'
+                      ? 'bg-[#0b192e] text-white font-bold shadow-xs'
+                      : 'text-slate-600 hover:text-slate-900'
+                  }`}
+                >
+                  Today's Consultations ({todayAppointments.length})
+                </button>
+                <button
+                  onClick={() => setScheduleScope('upcoming')}
+                  className={`px-3 py-1.5 rounded-lg transition-all cursor-pointer ${
+                    scheduleScope === 'upcoming'
+                      ? 'bg-[#0b192e] text-white font-bold shadow-xs'
+                      : 'text-slate-600 hover:text-slate-900'
+                  }`}
+                >
+                  Upcoming Appointments ({upcomingAppointments.length})
+                </button>
+              </div>
+
+              {/* Status Filter Pills (for Today's queue) */}
+              {scheduleScope === 'today' && (
+                <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-xl text-xs font-medium">
+                  <button
+                    onClick={() => setAppointmentFilter('all')}
+                    className={`px-2.5 py-1.5 rounded-lg transition-all cursor-pointer ${
+                      appointmentFilter === 'all' ? 'bg-white text-slate-900 font-bold shadow-xs' : 'text-slate-600 hover:text-slate-900'
+                    }`}
+                  >
+                    All ({todayAppointments.length})
+                  </button>
+                  <button
+                    onClick={() => setAppointmentFilter('waiting')}
+                    className={`px-2.5 py-1.5 rounded-lg transition-all cursor-pointer ${
+                      appointmentFilter === 'waiting' ? 'bg-white text-slate-900 font-bold shadow-xs' : 'text-slate-600 hover:text-slate-900'
+                    }`}
+                  >
+                    Waiting ({waitingCount})
+                  </button>
+                  <button
+                    onClick={() => setAppointmentFilter('in-progress')}
+                    className={`px-2.5 py-1.5 rounded-lg transition-all cursor-pointer ${
+                      appointmentFilter === 'in-progress' ? 'bg-white text-slate-900 font-bold shadow-xs' : 'text-slate-600 hover:text-slate-900'
+                    }`}
+                  >
+                    In Consult ({inConsultCount})
+                  </button>
+                  <button
+                    onClick={() => setAppointmentFilter('completed')}
+                    className={`px-2.5 py-1.5 rounded-lg transition-all cursor-pointer ${
+                      appointmentFilter === 'completed' ? 'bg-white text-slate-900 font-bold shadow-xs' : 'text-slate-600 hover:text-slate-900'
+                    }`}
+                  >
+                    Completed ({completedCount})
+                  </button>
+                </div>
+              )}
             </div>
           </div>
 
@@ -1089,7 +1124,7 @@ export const DoctorDashboard: React.FC = () => {
                                 </button>
                               )}
 
-                              {apt.status === 'Scheduled' && (
+                              {(apt.status === 'Scheduled' || apt.status === 'Rescheduled' || apt.status === 'Confirmed') && (
                                 <button
                                   onClick={() => updateAppointmentStatus(apt.id, 'Waiting')}
                                   className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-medium text-xs border border-slate-200 transition-colors cursor-pointer"
@@ -1097,6 +1132,12 @@ export const DoctorDashboard: React.FC = () => {
                                   <UserCheck className="w-3.5 h-3.5" />
                                   <span>Mark Arrived</span>
                                 </button>
+                              )}
+
+                              {apt.status === 'Requested' && (
+                                <span className="text-[11px] font-semibold text-amber-800 bg-amber-50 px-2.5 py-1 rounded-lg border border-amber-200">
+                                  Awaiting Approval
+                                </span>
                               )}
 
                               {apt.status === 'Completed' && (
@@ -1116,6 +1157,139 @@ export const DoctorDashboard: React.FC = () => {
                   )}
                 </tbody>
               </table>
+            </div>
+          )}
+        </div>
+
+        {/* Separate Section: Patient Booking Requests Awaiting Approval */}
+        <div className="bg-amber-50/70 rounded-2xl border border-amber-200/90 p-5 shadow-xs space-y-3">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+            <div className="flex items-center gap-2.5">
+              <div className="w-8 h-8 rounded-xl bg-amber-100 text-amber-800 border border-amber-200 flex items-center justify-center shrink-0">
+                <Calendar className="w-4 h-4 text-amber-700" />
+              </div>
+              <div>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <h3 className="text-sm font-bold text-slate-900">
+                    Patient Booking Requests Awaiting Approval
+                  </h3>
+                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-100 text-amber-900 border border-amber-300">
+                    {requestedAppointments.length} Pending Request{requestedAppointments.length === 1 ? '' : 's'}
+                  </span>
+                </div>
+                <p className="text-xs text-slate-600">
+                  Self-service appointment requests submitted from the Patient Portal, kept separate from confirmed daily consultations.
+                </p>
+              </div>
+            </div>
+            <button
+              onClick={() => setActiveTab('appointments')}
+              className="text-xs font-bold text-teal-800 hover:text-teal-950 bg-white px-3 py-1.5 rounded-xl border border-slate-200 shadow-2xs cursor-pointer self-start sm:self-center inline-flex items-center gap-1"
+            >
+              <span>Manage in Appointments</span>
+              <ChevronRight className="w-3.5 h-3.5" />
+            </button>
+          </div>
+
+          {requestedAppointments.length === 0 ? (
+            <div className="bg-white/80 rounded-xl p-4 border border-amber-200/60 text-xs text-slate-500 text-center">
+              No pending patient booking requests awaiting approval.
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pt-1">
+              {requestedAppointments.map((req) => {
+                const canManage = canManageAppointmentRequest(currentUser, req);
+                return (
+                  <div
+                    key={req.id}
+                    className="bg-white rounded-xl p-4 border border-amber-200/80 shadow-2xs flex flex-col justify-between gap-3"
+                  >
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="flex items-start gap-3 min-w-0">
+                        <Avatar
+                          src={req.patientPhotoUrl || patients.find((p) => p.id === req.patientId)?.photoUrl}
+                          name={req.patientName}
+                          gender={req.patientGender}
+                          size="sm"
+                        />
+                        <div className="min-w-0 space-y-0.5">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className="font-bold text-slate-900 text-xs">{req.patientName}</span>
+                            <span className="text-[11px] text-slate-500 font-medium">
+                              ({req.patientAge}y/{req.patientGender.charAt(0)})
+                            </span>
+                            <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${getStatusBadge(req.status)}`}>
+                              {req.status}
+                            </span>
+                          </div>
+                          <p className="text-[11px] text-teal-800 font-semibold truncate">
+                            Specialist: {req.doctorName} • {req.department || 'Outpatient Clinic'}
+                          </p>
+                          <div className="flex flex-wrap items-center gap-2.5 text-[11px] text-slate-600 pt-0.5">
+                            <span className="flex items-center gap-1 font-semibold text-slate-800">
+                              <Calendar className="w-3 h-3 text-amber-600" />
+                              {req.date}
+                            </span>
+                            <span className="flex items-center gap-1 font-semibold text-slate-800">
+                              <Clock className="w-3 h-3 text-amber-600" />
+                              {req.timeSlot}
+                            </span>
+                            <span className="text-[10px] font-semibold text-slate-700 bg-slate-100 px-1.5 py-0.5 rounded">
+                              {req.type}
+                            </span>
+                            {req.consultationMode && (
+                              <span className="text-[10px] font-semibold text-teal-800 bg-teal-50 px-1.5 py-0.5 rounded border border-teal-200/70">
+                                {req.consultationMode}
+                              </span>
+                            )}
+                          </div>
+                          <p className="text-[11px] text-slate-500 italic truncate pt-0.5">
+                            Reason: "{req.chiefComplaint}"
+                          </p>
+                        </div>
+                      </div>
+                      <span className="text-[10px] font-mono text-slate-500 bg-slate-50 px-2 py-0.5 rounded border border-slate-200 shrink-0">
+                        #{req.tokenNumber}
+                      </span>
+                    </div>
+
+                    <div className="pt-2.5 border-t border-slate-100 flex flex-wrap items-center justify-between gap-2">
+                      {canManage ? (
+                        <div className="flex flex-wrap items-center gap-2 w-full">
+                          <button
+                            onClick={() => acceptPatientAppointmentRequest(req.id)}
+                            className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-[11px] font-bold shadow-2xs transition-colors cursor-pointer"
+                          >
+                            <CheckCircle2 className="w-3.5 h-3.5" />
+                            <span>Accept Request</span>
+                          </button>
+                          <button
+                            onClick={() => setRescheduleTarget(req)}
+                            className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-indigo-50 hover:bg-indigo-100 text-indigo-800 border border-indigo-200 text-[11px] font-semibold transition-colors cursor-pointer"
+                          >
+                            <RefreshCw className="w-3.5 h-3.5 text-indigo-600" />
+                            <span>Propose Reschedule</span>
+                          </button>
+                          <button
+                            onClick={() => setDeclineTarget(req)}
+                            className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 text-[11px] font-semibold transition-colors cursor-pointer ml-auto"
+                          >
+                            <XCircle className="w-3.5 h-3.5 text-rose-600" />
+                            <span>Decline</span>
+                          </button>
+                        </div>
+                      ) : (
+                        <div className="flex items-center justify-between w-full text-[11px] text-slate-500 bg-slate-50 px-2.5 py-1.5 rounded-lg border border-slate-200/80">
+                          <span className="inline-flex items-center gap-1.5 font-medium">
+                            <Lock className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                            <span>Assigned to <strong className="text-slate-700">{req.doctorName}</strong> — Only assigned doctor can approve</span>
+                          </span>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
             </div>
           )}
         </div>
@@ -1276,6 +1450,20 @@ export const DoctorDashboard: React.FC = () => {
           </div>
         </div>
       </div>
+
+      {declineTarget && (
+        <DoctorDeclineRequestModal
+          appointment={declineTarget}
+          onClose={() => setDeclineTarget(null)}
+        />
+      )}
+
+      {rescheduleTarget && (
+        <DoctorProposeRescheduleModal
+          appointment={rescheduleTarget}
+          onClose={() => setRescheduleTarget(null)}
+        />
+      )}
     </div>
   );
 };
